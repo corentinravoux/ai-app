@@ -2,19 +2,28 @@ import 'dart:convert';
 
 import 'agents.dart';
 import 'claude_seed.dart';
+import 'claude_slots.dart';
 import 'guard.dart';
 import 'launch.dart';
 import 'runner.dart';
 import 'sandbox.dart';
 
-/// Clusters offered in the app. Metis is left out: no `/messages` endpoint,
-/// and alcf-ai disables it for tool calls.
-const kClusters = ['minerva', 'sophia', 'tara'];
+/// Clusters offered in the app, default first. Tara has the most capacity
+/// (many Muse Spark and Mistral 4 replicas) and needs alcf-ai >= 0.21.
+/// Metis is left out: no `/messages` endpoint, and alcf-ai disables it for
+/// tool calls.
+const kClusters = ['tara', 'minerva', 'sophia'];
 
-/// Models ALCF serves that `alcf-ai agent configure` does not allowlist yet.
-/// Configure adds `--include-experimental` for them, or codex, pi and
-/// opencode leave them out. Drop an entry once alcf-ai lists it.
-const kNotYetAllowlisted = {'mistral-large-4-nvfp4'};
+/// Models ALCF serves that `alcf-ai agent configure` (0.21) does not
+/// allowlist yet on that cluster. Configure adds `--include-experimental`
+/// for them, or codex, pi and opencode leave them out. Drop an entry once
+/// alcf-ai lists it.
+const kNotYetAllowlisted = {
+  'tara': {'muse-spark-bf16', 'mistral-large-4'},
+};
+
+bool needsExperimental(String cluster, String model) =>
+    kNotYetAllowlisted[cluster]?.contains(model) ?? false;
 
 enum ModelStatus { running, queued, offline, unknown }
 
@@ -196,6 +205,8 @@ class AlcfCli {
     String cluster = 'minerva',
     bool experimental = false,
     bool includePlugins = false,
+    Map<ClaudeSlot, String>? claudeSlots,
+    Map<String, String> modelNames = const {},
   }) async {
     await sandbox.ensure();
     if (!await tokenOk()) return const LoginNeeded();
@@ -218,7 +229,7 @@ class AlcfCli {
         model,
         '-c',
         cluster,
-        if (experimental || kNotYetAllowlisted.contains(model))
+        if (experimental || needsExperimental(cluster, model))
           '--include-experimental',
       ],
       env: {..._cleanEnv, 'HOME': sandbox.home, 'UV_CACHE_DIR': uvCacheDir},
@@ -226,6 +237,14 @@ class AlcfCli {
     final touched = await guard.changedSince(before);
     if (touched.isNotEmpty) return RealConfigTouched(touched);
     if (r.exitCode != 0) return ConfigureFailed(explainError(r.stderr));
+    if (kind == AgentKind.claude && claudeSlots != null) {
+      await writeClaudeSlots(
+        '${sandbox.claudeDir}/settings.json',
+        claudeSlots,
+        cluster: cluster,
+        names: modelNames,
+      );
+    }
     if (kind == AgentKind.codex) {
       await clearFreeformApplyPatch('${sandbox.home}/.codex/catalogs');
     }

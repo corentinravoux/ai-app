@@ -82,8 +82,8 @@ The left sidebar lists the agents.
   The app finds `~/.claude` and every `~/.claude-<name>` folder that holds a
   login. To rename or choose them, see [Settings](#settings).
 
-The bar above each tab says where its requests go ("Runs on ALCF minerva,
-model gpt-oss-120b"). If the ALCF login has expired, a banner offers
+The bar above each tab says where its requests go ("Runs on ALCF tara,
+model inkling-bf16"). If the ALCF login has expired, a banner offers
 **Log in**; the app re-checks it every 3 hours.
 
 Agents marked "Not installed" were not found. The app looks on your `PATH`
@@ -121,10 +121,16 @@ line). Drag a divider to resize; double-click it to even the two sides. The
 
 ## Agents on ALCF: what to know
 
-- **Claude**: only models that speak the Anthropic API are offered (Minerva).
+- **Clusters**: Tara is the default. It has the most capacity (many Muse
+  Spark and Mistral 4 replicas), so pick it when Minerva answers slowly. Tara
+  needs alcf-ai 0.21 or later (`uv tool upgrade alcf-ai`). On Tara, Muse
+  Spark and Mistral 4 are not yet on alcf-ai's agent allowlist; Configure
+  adds `--include-experimental` for them on its own.
+- **Claude**: only models that speak the Anthropic API are offered.
   Plugins and hooks are off by default because they fill the context; tick
   "Include plugins & hooks" in Configure to use the ones from `~/.claude`.
-- **Codex**: only Minerva models (the only cluster with the API Codex needs).
+- **Codex**: only Minerva and Tara models (the clusters with the API Codex
+  needs).
   The ALCF gateway refuses three Codex tools, so in the app's copy the app
   turns off the `apply_patch` tool, multi-agent mode and web search. Codex
   still edits files, through shell commands.

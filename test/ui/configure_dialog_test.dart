@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:alcfai_app/app/app_state.dart';
@@ -113,11 +114,11 @@ void main() {
   Iterable<Call> configureCalls() =>
       runner.calls.where((c) => c.args.take(2).join(' ') == 'agent configure');
 
-  testWidgets('cluster dropdown offers kClusters, default minerva, no metis', (
+  testWidgets('cluster dropdown offers kClusters, default tara, no metis', (
     tester,
   ) async {
     await openDialog(tester, 'pi-alcf');
-    expect(find.text('minerva'), findsOneWidget);
+    expect(find.text('tara'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('cluster-dropdown')));
     await tester.pumpAndSettle();
     for (final c in kClusters) {
@@ -130,7 +131,13 @@ void main() {
     tester,
   ) async {
     await openDialog(tester, 'claude-alcf');
-    expect(find.text('inkling-bf16'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('model-dropdown')),
+        matching: find.text('inkling-bf16'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('queued'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('model-dropdown')));
     await tester.pumpAndSettle();
@@ -166,6 +173,34 @@ void main() {
     await tester.pump();
     await pressConfigure(tester);
     expect(FileSystemEntity.isLinkSync('${sb.claudeDir}/plugins'), isTrue);
+  });
+
+  testWidgets('Claude: one dropdown per /model alias, written on configure', (
+    tester,
+  ) async {
+    await openDialog(tester, 'pi-alcf');
+    expect(find.byKey(const ValueKey('slot-opus')), findsNothing);
+    Navigator.of(tester.element(find.byType(AlertDialog))).pop();
+    await tester.pumpAndSettle();
+
+    await openDialog(tester, 'claude-alcf');
+    for (final s in ['opus', 'sonnet', 'haiku']) {
+      expect(find.byKey(ValueKey('slot-$s')), findsOneWidget, reason: s);
+    }
+    await tester.tap(find.byKey(const ValueKey('slot-haiku')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('gpt-oss-120b').last);
+    await tester.pumpAndSettle();
+    await pressConfigure(tester);
+    await settle(tester);
+
+    final env =
+        (jsonDecode(File('${sb.claudeDir}/settings.json').readAsStringSync())
+                as Map)['env']
+            as Map;
+    expect(env['ANTHROPIC_DEFAULT_OPUS_MODEL'], 'inkling-bf16');
+    expect(env['ANTHROPIC_DEFAULT_HAIKU_MODEL'], 'gpt-oss-120b');
+    expect(env['ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME'], 'GPT-OSS 120B');
   });
 
   testWidgets('Ok closes the dialog and refreshes', (tester) async {

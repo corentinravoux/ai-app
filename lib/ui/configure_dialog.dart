@@ -4,6 +4,7 @@ import '../app/app_state.dart';
 import '../core/agents.dart';
 import '../core/alcf_cli.dart';
 import '../core/app_store.dart';
+import '../core/claude_slots.dart';
 import '../core/profiles.dart';
 import 'theme.dart';
 
@@ -53,6 +54,7 @@ class _ConfigureDialogState extends State<_ConfigureDialog> {
   List<AlcfModel> _models = [];
   Map<String, ModelStatus> _status = {};
   String? _model;
+  Map<ClaudeSlot, String> _slots = {};
   bool _loading = true;
   bool _experimental = false;
   bool _plugins = false;
@@ -91,8 +93,27 @@ class _ConfigureDialogState extends State<_ConfigureDialog> {
             orElse: () => null,
           ) ??
           (models.isEmpty ? null : models.first.id);
+      _slots = _isClaude && _model != null
+          ? pickClaudeSlots(
+              [for (final m in models) m.id],
+              _model!,
+              current: _savedSlots(cluster),
+            )
+          : {};
       _loading = false;
     });
+  }
+
+  /// Slots the app wrote last time on this cluster. alcf-ai alone sets
+  /// every slot to the default model, without names; those are not a pick.
+  Map<ClaudeSlot, String> _savedSlots(String cluster) {
+    final env = widget.state.claudeEnv();
+    final url = '${env['ANTHROPIC_BASE_URL'] ?? ''}';
+    if (!url.contains('resource_server/$cluster/') ||
+        !env.containsKey('ANTHROPIC_DEFAULT_OPUS_MODEL_NAME')) {
+      return const {};
+    }
+    return readClaudeSlots(env);
   }
 
   Future<void> _submit() async {
@@ -108,6 +129,8 @@ class _ConfigureDialogState extends State<_ConfigureDialog> {
       cluster: _cluster,
       experimental: _experimental,
       includePlugins: _isClaude && _plugins,
+      claudeSlots: _isClaude ? _slots : null,
+      modelNames: {for (final m in _models) m.id: m.displayName},
     );
     if (!mounted) return;
     if (r is ConfigureOk) {
@@ -177,6 +200,7 @@ class _ConfigureDialogState extends State<_ConfigureDialog> {
                 'Only models that speak the Anthropic API are listed.',
                 style: t.bodySmall,
               ),
+              if (!_loading && _models.isNotEmpty) ..._slotFields(t),
             ],
             const SizedBox(height: 10),
             CheckboxListTile(
@@ -190,7 +214,7 @@ class _ConfigureDialogState extends State<_ConfigureDialog> {
                   : (v) => setState(() => _experimental = v ?? false),
               title: const Text('Include experimental models'),
               subtitle: Text(
-                'Needed for tara; less tested by ALCF.',
+                'Models ALCF has not vetted for agents yet.',
                 style: t.bodySmall,
               ),
             ),
@@ -235,6 +259,49 @@ class _ConfigureDialogState extends State<_ConfigureDialog> {
       ],
     );
   }
+
+  /// One dropdown per `/model` alias in Claude Code.
+  List<Widget> _slotFields(TextTheme t) => [
+    const SizedBox(height: 14),
+    const Text('Models in the /model menu'),
+    const SizedBox(height: 6),
+    for (final s in ClaudeSlot.values)
+      Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Row(
+          children: [
+            SizedBox(width: 70, child: Text(slotLabel(s))),
+            Expanded(
+              child: KeyedSubtree(
+                key: ValueKey('slot-${s.name}-$_cluster'),
+                child: DropdownButtonFormField<String>(
+                  key: ValueKey('slot-${s.name}'),
+                  initialValue: _slots[s],
+                  isExpanded: true,
+                  isDense: true,
+                  items: [
+                    for (final m in _models)
+                      DropdownMenuItem(
+                        value: m.id,
+                        child: Text(m.id, overflow: TextOverflow.ellipsis),
+                      ),
+                  ],
+                  onChanged: _busy
+                      ? null
+                      : (v) {
+                          if (v != null) setState(() => _slots[s] = v);
+                        },
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    Text(
+      'Haiku also runs Claude Code background tasks; Fable follows Opus.',
+      style: t.bodySmall,
+    ),
+  ];
 
   Widget _modelField(TextTheme t) {
     if (_loading) {

@@ -196,10 +196,25 @@ void main() {
   });
 
   test('configure adds --include-experimental for a model alcf-ai does not '
-      'allowlist yet', () async {
-    await cli().configure(AgentKind.pi, model: 'mistral-large-4-nvfp4');
+      'allowlist yet on that cluster', () async {
+    await cli().configure(
+      AgentKind.pi,
+      model: 'muse-spark-bf16',
+      cluster: 'tara',
+    );
     expect(configureCalls().single.args, contains('--include-experimental'));
   });
+
+  test(
+    'configure leaves --include-experimental out for an allowlisted model',
+    () async {
+      await cli().configure(AgentKind.pi, model: 'muse-spark-bf16');
+      expect(
+        configureCalls().single.args,
+        isNot(contains('--include-experimental')),
+      );
+    },
+  );
 
   test('configure returns LoginNeeded when token check fails', () async {
     runner.handlers['/bin/alcf-tokens get-token inference'] = (_) =>
@@ -307,6 +322,6 @@ void main() {
   });
 
   test('kClusters never offers metis', () {
-    expect(kClusters, ['minerva', 'sophia', 'tara']);
+    expect(kClusters, ['tara', 'minerva', 'sophia']);
   });
 }

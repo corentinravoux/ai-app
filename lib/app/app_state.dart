@@ -442,6 +442,9 @@ class AppState extends ChangeNotifier {
     return 'ALCF, config in ${_tilde(sandbox.overrideValue(p.kind))}';
   }
 
+  /// The `env` block of the ALCF Claude settings, empty when unreadable.
+  Map<String, dynamic> claudeEnv() => _claudeEnv();
+
   Map<String, dynamic> _claudeEnv() {
     try {
       final f = File('${sandbox.claudeDir}/settings.json');
