@@ -1,10 +1,11 @@
-import 'package:alcfai_app/core/runner.dart';
+import 'package:ai_app/core/runner.dart';
 
 class Call {
-  Call(this.exe, this.args, this.env);
+  Call(this.exe, this.args, this.env, [this.timeout]);
   final String exe;
   final List<String> args;
   final Map<String, String>? env;
+  final Duration? timeout;
   String get line => [exe, ...args].join(' ');
 }
 
@@ -23,8 +24,9 @@ class FakeRunner implements Runner {
     String exe,
     List<String> args, {
     Map<String, String>? env,
+    Duration? timeout,
   }) async {
-    final c = Call(exe, args, env);
+    final c = Call(exe, args, env, timeout);
     calls.add(c);
     for (final e in handlers.entries) {
       if (c.line.startsWith(e.key)) return e.value(c);

@@ -2,7 +2,9 @@ import 'dart:io';
 
 import 'agents.dart';
 
-enum Backend { alcf, native }
+/// Where a profile's requests go: ALCF, a native Claude account, or a
+/// model host of the user's own (llm-host).
+enum Backend { alcf, native, local }
 
 /// One entry in the sidebar: an agent plus where its config lives.
 class Profile {
@@ -12,6 +14,7 @@ class Profile {
     required this.kind,
     required this.backend,
     this.nativeConfigDir,
+    this.hostId,
   });
 
   final String id;
@@ -22,7 +25,12 @@ class Profile {
   /// For native Claude profiles: the existing Claude home, launch-only.
   final String? nativeConfigDir;
 
+  /// For local profiles: the model host's id (hosts.dart).
+  final String? hostId;
+
   bool get isAlcf => backend == Backend.alcf;
+  bool get isNative => backend == Backend.native;
+  bool get isLocal => backend == Backend.local;
 }
 
 /// A Claude Code home (config dir) the user is logged in with, launched

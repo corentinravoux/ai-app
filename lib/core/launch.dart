@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'agents.dart';
 import 'app_store.dart';
+import 'platform_paths.dart';
 import 'profiles.dart';
 import 'sandbox.dart';
 
@@ -35,14 +36,8 @@ class LaunchSpec {
   final String cwd;
 }
 
-String? whichOnPath(String exe, Map<String, String> env) {
-  for (final dir in (env['PATH'] ?? '').split(':')) {
-    if (dir.isEmpty) continue;
-    final f = File('$dir/$exe');
-    if (f.existsSync() && f.statSync().mode & 0x49 != 0) return f.path;
-  }
-  return null;
-}
+String? whichOnPath(String exe, Map<String, String> env) =>
+    whichOn(exe, env, currentOs());
 
 LaunchSpec buildLaunch(
   Profile p, {
@@ -58,6 +53,9 @@ LaunchSpec buildLaunch(
       if (!kStrippedEnvKeys.contains(e.key) && !e.key.startsWith('ANTHROPIC_'))
         e.key: e.value,
   };
+  if (p.isLocal) {
+    throw ArgumentError('local profiles launch through buildLocalLaunch');
+  }
   if (p.isAlcf) {
     env['ALCF_SESSION_ID'] = sessionId;
     final key = switch (p.kind) {
@@ -78,6 +76,7 @@ LaunchSpec buildLaunch(
 /// (they are added in ~/.bashrc, which a menu launch never reads).
 const kAgentBinDirs = [
   '.local/bin',
+  'opt/node/bin',
   '.opencode/bin',
   '.pi/agent/bin',
   '.bun/bin',
@@ -87,16 +86,31 @@ const kAgentBinDirs = [
 
 /// The parent PATH followed by every existing [kAgentBinDirs] folder not
 /// already on it.
-String agentPath(Map<String, String> env, String realHome) {
+String agentPath(Map<String, String> env, String realHome) =>
+    agentPathFor(env, realHome, currentOs());
+
+/// Homebrew's folders: an app started from Finder gets only
+/// /usr/bin:/bin:/usr/sbin:/sbin, without node, python3 ≥ 3.11 or ssh-agent
+/// helpers installed by Homebrew.
+const kMacExtraBinDirs = ['/opt/homebrew/bin', '/usr/local/bin'];
+
+/// [agentPath] for a given OS. On Windows npm puts its shims in
+/// `%APPDATA%\npm`, which is added too.
+String agentPathFor(Map<String, String> env, String realHome, HostOs os) {
+  final sep = pathSep(os);
   final dirs = [
-    for (final d in (env['PATH'] ?? '').split(':'))
+    for (final d in (env['PATH'] ?? '').split(sep))
       if (d.isNotEmpty) d,
   ];
-  for (final d in kAgentBinDirs) {
-    final full = '$realHome/$d';
+  final extra = [
+    for (final d in kAgentBinDirs) '$realHome/$d',
+    if (os == HostOs.windows && env['APPDATA'] != null) '${env['APPDATA']}/npm',
+    if (os == HostOs.macos) ...kMacExtraBinDirs,
+  ];
+  for (final full in extra) {
     if (!dirs.contains(full) && Directory(full).existsSync()) dirs.add(full);
   }
-  return dirs.join(':');
+  return dirs.join(sep);
 }
 
 /// Flags that keep an agent inside what the ALCF gateway accepts.

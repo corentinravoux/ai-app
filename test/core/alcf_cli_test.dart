@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:alcfai_app/core/agents.dart';
-import 'package:alcfai_app/core/alcf_cli.dart';
-import 'package:alcfai_app/core/guard.dart';
-import 'package:alcfai_app/core/runner.dart';
-import 'package:alcfai_app/core/sandbox.dart';
+import 'package:ai_app/core/agents.dart';
+import 'package:ai_app/core/alcf_cli.dart';
+import 'package:ai_app/core/guard.dart';
+import 'package:ai_app/core/runner.dart';
+import 'package:ai_app/core/sandbox.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/fake_runner.dart';
@@ -70,7 +70,7 @@ void main() {
   );
 
   setUp(() {
-    tmp = Directory.systemTemp.createTempSync('alcfai_cli_');
+    tmp = Directory.systemTemp.createTempSync('aiapp_cli_');
     realHome = '${tmp.path}/home';
     Directory('$realHome/.globus').createSync(recursive: true);
     Directory('$realHome/.claude/plugins').createSync(recursive: true);

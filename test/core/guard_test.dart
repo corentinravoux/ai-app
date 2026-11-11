@@ -1,11 +1,11 @@
 import 'dart:io';
 
-import 'package:alcfai_app/core/guard.dart';
+import 'package:ai_app/core/guard.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   late Directory tmp;
-  setUp(() => tmp = Directory.systemTemp.createTempSync('alcfai_guard_'));
+  setUp(() => tmp = Directory.systemTemp.createTempSync('aiapp_guard_'));
   tearDown(() => tmp.deleteSync(recursive: true));
 
   test('defaultPaths lists every account and agent config', () {
@@ -15,6 +15,7 @@ void main() {
       '$h/.claude-alt/settings.json',
       '$h/.codex/config.toml',
       '$h/.pi/agent/models.json',
+      '$h/.pi/agent/settings.json',
       '$h/.config/opencode/opencode.jsonc',
     ]);
   });

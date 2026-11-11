@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
 
@@ -6,17 +7,22 @@ import 'app/app_state.dart';
 import 'core/alcf_cli.dart';
 import 'core/app_store.dart';
 import 'core/guard.dart';
+import 'core/host_client.dart';
+import 'core/hosts.dart';
 import 'core/launch.dart';
+import 'core/platform_paths.dart';
 import 'core/profiles.dart';
 import 'core/pty.dart';
 import 'core/runner.dart';
 import 'core/sandbox.dart';
+import 'core/tunnel.dart';
 import 'ui/configure_dialog.dart';
 import 'ui/home_page.dart';
 import 'ui/theme.dart';
 
 Future<void> main() async {
-  final realHome = Platform.environment['HOME']!;
+  final os = currentOs();
+  final realHome = homeDir(Platform.environment, os);
   // Agents installed in ~/.opencode/bin and the like are often missing from
   // a desktop session's PATH: add them for lookup, configure and launch.
   final env = {
@@ -31,8 +37,12 @@ Future<void> main() async {
   await store.load();
   final accounts = store.accounts ?? detectClaudeAccounts(realHome);
 
-  final alcfExe = whichOnPath('alcf-ai', env);
-  final tokensExe = whichOnPath('alcf-tokens', env);
+  // alcf-ai is redirected by setting HOME and finds its login through a
+  // symlink: both POSIX-only, so ALCF is off on Windows.
+  final alcfExe = os == HostOs.windows ? null : whichOnPath('alcf-ai', env);
+  final tokensExe = os == HostOs.windows
+      ? null
+      : whichOnPath('alcf-tokens', env);
 
   final alcf = (alcfExe == null || tokensExe == null)
       ? null
@@ -51,6 +61,22 @@ Future<void> main() async {
           parentEnv: env,
         );
 
+  // Model hosts (docs/hosts.md): this machine when llm-host is installed,
+  // plus the hosts added in the app.
+  final dataRoot = '${dataHome(Platform.environment, os)}/ai-app';
+  final registry = HostRegistry(
+    '${configHome(Platform.environment, os)}/ai-app/hosts.json',
+  );
+  final hosts = await loadHostsSeeding(
+    registry,
+    (exe) => whichOnPath(exe, env),
+  );
+  final sshExe = whichOnPath('ssh', env);
+  final controlDir = '$dataRoot/ssh';
+  await Directory(controlDir).create(recursive: true);
+  if (os != HostOs.windows) await Process.run('chmod', ['700', controlDir]);
+  final claudeDirs = [for (final a in accounts) a.dir];
+
   // New sessions start in the last folder used, else the home folder.
   final defaultCwd =
       store.recentFolders.where((f) => Directory(f).existsSync()).firstOrNull ??
@@ -65,11 +91,47 @@ Future<void> main() async {
     parentEnv: env,
     defaultCwd: defaultCwd,
     store: store,
+    hosts: hosts,
+    registry: registry,
+    hostClient: HostClient(
+      runner: const IoRunner(),
+      sshExe: sshExe ?? 'ssh',
+      controlDir: controlDir,
+      controlMaster: supportsSshControlMaster(os),
+    ),
+    tunnels: TunnelManager(
+      start: startIoProc,
+      probe: tcpProbe,
+      sshExe: sshExe ?? 'ssh',
+    ),
+    dataRoot: dataRoot,
+    sshAvailable: sshExe != null,
+    alcfMissing: os == HostOs.windows
+        ? 'ALCF needs Linux or macOS'
+        : 'alcf-ai is not installed',
+    guardPaths: RealConfigGuard.defaultPaths(realHome, claudeDirs),
+    guardedRoots: [
+      '$realHome/.claude',
+      ...claudeDirs,
+      '$realHome/.pi',
+      '$realHome/.config/opencode',
+      '$realHome/.codex',
+      '$realHome/Software/claude_config/claude',
+    ],
   );
 
-  runApp(AlcfaiApp(state: state, onConfigure: showConfigureDialog));
+  runApp(AiApp(state: state, onConfigure: showConfigureDialog));
   sandbox.ensure().then((_) => state.refresh());
   state.startLoginChecks();
+  state.startHostPolling();
+  // Close the ssh forwards when the window closes, or they outlive the app
+  // and hold their local ports.
+  AppLifecycleListener(
+    onExitRequested: () async {
+      await state.tunnels?.dispose();
+      return AppExitResponse.exit;
+    },
+  );
 }
 
 String _uvCacheDir(Map<String, String> env, String realHome) {
@@ -87,15 +149,15 @@ String _uvCacheDir(Map<String, String> env, String realHome) {
   return '$realHome/.cache/uv';
 }
 
-class AlcfaiApp extends StatelessWidget {
-  const AlcfaiApp({super.key, required this.state, this.onConfigure});
+class AiApp extends StatelessWidget {
+  const AiApp({super.key, required this.state, this.onConfigure});
 
   final AppState state;
   final ConfigureAction? onConfigure;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: 'ALCF AI',
+    title: 'AI App',
     debugShowCheckedModeBanner: false,
     theme: buildTheme(),
     home: HomePage(state: state, onConfigure: onConfigure),

@@ -1,0 +1,12 @@
+# Example recipe. Copy to ~/.config/llm-host/recipes/ and adjust to the
+# host's measurements (see the local-llm skill workflow). The file name is the
+# recipe name and the model alias.
+label = "Qwen3.6 35B-A3B · 64K"
+model = "unsloth/Qwen3.6-35B-A3B-MTP-GGUF/Qwen3.6-35B-A3B-UD-IQ4_XS.gguf"   # relative to models_dir
+# mmproj = "unsloth/Qwen3.6-35B-A3B-MTP-GGUF/mmproj-F16.gguf"              # optional, vision
+ctx = 65536          # -c; with -np 2 each slot gets half
+max_output = 8192    # the output cap agents are told to use
+args = ["-ngl", "99", "--n-cpu-moe", "20", "-t", "6", "-fa", "on",
+        "-ctk", "q8_0", "-ctv", "q8_0", "-np", "1",
+        "--chat-template-kwargs", "{\"enable_thinking\":false}"]
+notes = "RTX 3060 12 GB + 16 GB RAM, b12190, 2026-11-11: 10.9 GB VRAM, ~600 tok/s prefill, ~38 tok/s generation"

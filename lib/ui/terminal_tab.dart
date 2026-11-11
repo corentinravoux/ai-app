@@ -9,10 +9,14 @@ import 'package:xterm/xterm.dart';
 import '../core/launch.dart';
 import '../core/pty.dart';
 import '../core/term_tools.dart';
+import '../core/platform_paths.dart';
 import 'theme.dart';
 
+/// Opens [url] in the default browser (named for its first, Linux-only
+/// version; it now follows the platform).
 void openWithXdg(String url) {
-  Process.run('xdg-open', [url]).ignore();
+  final cmd = openUrlCommand(url, currentOs());
+  Process.run(cmd.first, cmd.sublist(1)).ignore();
 }
 
 /// Copy, paste and select-all on Ctrl+Shift, like other Linux terminals, so

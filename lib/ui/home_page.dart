@@ -4,6 +4,7 @@ import '../app/app_state.dart';
 import '../app/layout.dart';
 import '../core/alcf_cli.dart';
 import '../core/profiles.dart';
+import 'host_dialog.dart';
 import 'new_session_dialog.dart';
 import 'sidebar.dart';
 import 'terminal_tab.dart';
@@ -52,6 +53,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _open(BuildContext context, ProfileStatus s) async {
     final p = s.profile;
+    if (p.isLocal) return _openLocal(context, s);
     String? warning;
     final status = await state.statusFor(p);
     final c = state.choiceFor(p);
@@ -76,36 +78,78 @@ class _HomePageState extends State<HomePage> {
     if (cwd != null) state.open(p, cwd);
   }
 
+  Future<void> _openLocal(BuildContext context, ProfileStatus s) async {
+    final p = s.profile;
+    final cwd = await showNewSessionDialog(
+      context,
+      p.label,
+      state.defaultCwd,
+      recent: state.recentFolders,
+      pickFolder: widget.pickFolder,
+    );
+    if (cwd == null) return;
+    final err = await state.openLocal(p, cwd);
+    if (err != null && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+    }
+  }
+
+  void _showNotice(BuildContext context) {
+    final n = state.notice;
+    if (n == null) return;
+    state.notice = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(n)));
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: state,
-      builder: (context, _) => Scaffold(
-        body: Row(
-          children: [
-            Sidebar(
-              state: state,
-              onOpen: (s) => _open(context, s),
-              onConfigure: (s) =>
-                  widget.onConfigure?.call(context, state, s.profile),
-            ),
-            Expanded(
-              child: Column(
-                children: [
-                  _Banner(state: state),
-                  if (state.tabs.isEmpty)
-                    Expanded(child: _EmptyState(state: state))
-                  else ...[
-                    _TabStrip(state: state, onDragging: _setDragging),
-                    Expanded(child: _panesView()),
-                  ],
-                ],
+      // The notice is read on every state change, not only on a full build.
+      builder: (context, _) => _withNotice(
+        context,
+        Scaffold(
+          body: Row(
+            children: [
+              Sidebar(
+                state: state,
+                onOpen: (s) => _open(context, s),
+                onConfigure: (s) =>
+                    widget.onConfigure?.call(context, state, s.profile),
+                onAddHost: state.registry == null
+                    ? null
+                    : () => showHostDialog(context, state),
+                onEditHost: state.registry == null
+                    ? null
+                    : (h) => showHostDialog(context, state, editing: h),
               ),
-            ),
-          ],
+              Expanded(
+                child: Column(
+                  children: [
+                    _Banner(state: state),
+                    if (state.tabs.isEmpty)
+                      Expanded(child: _EmptyState(state: state))
+                    else ...[
+                      _TabStrip(state: state, onDragging: _setDragging),
+                      Expanded(child: _panesView()),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  Widget _withNotice(BuildContext context, Widget child) {
+    _showNotice(context);
+    return child;
   }
 
   static const _divider = 7.0;

@@ -1,12 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:alcfai_app/core/claude_slots.dart';
+import 'package:ai_app/core/claude_slots.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   late Directory tmp;
-  setUp(() => tmp = Directory.systemTemp.createTempSync('alcfai_slots_'));
+  setUp(() => tmp = Directory.systemTemp.createTempSync('aiapp_slots_'));
   tearDown(() => tmp.deleteSync(recursive: true));
 
   const tara = [

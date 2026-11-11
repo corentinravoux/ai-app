@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../app/app_state.dart';
 import '../core/agents.dart';
+import '../core/hosts.dart';
+import '../core/local_launch.dart';
+import 'host_tile.dart';
 import 'theme.dart';
 
 /// Shown while the ALCF Claude has no CLAUDE.md of its own (README:
@@ -15,16 +18,23 @@ class Sidebar extends StatelessWidget {
     required this.state,
     required this.onOpen,
     required this.onConfigure,
+    this.onEditHost,
+    this.onAddHost,
   });
 
   final AppState state;
   final void Function(ProfileStatus) onOpen;
   final void Function(ProfileStatus) onConfigure;
 
+  /// Opens the host dialog; null hides the edit buttons.
+  final void Function(ModelHost)? onEditHost;
+  final VoidCallback? onAddHost;
+
   @override
   Widget build(BuildContext context) {
     final alcf = state.statuses.where((s) => s.profile.isAlcf);
-    final native = state.statuses.where((s) => !s.profile.isAlcf);
+    final native = state.statuses.where((s) => s.profile.isNative);
+    final hostsShown = state.hostClient != null;
     return Container(
       width: 260,
       decoration: const BoxDecoration(
@@ -37,7 +47,7 @@ class Sidebar extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Text(
-              'ALCF AI',
+              'AI App',
               style: Theme.of(context).textTheme.titleMedium
                   ?.copyWith(fontSize: 17),
             ),
@@ -51,6 +61,35 @@ class Sidebar extends StatelessWidget {
           const _Group('ALCF inference'),
           for (final s in alcf) _tile(context, s),
           const SizedBox(height: 18),
+          if (hostsShown) ...[
+            const _Group('Model hosts'),
+            for (final h in state.hosts) ...[
+              HostTile(
+                state: state,
+                host: h,
+                onEdit: onEditHost == null ? null : () => onEditHost!(h),
+              ),
+              for (final s in state.statuses.where(
+                (s) => s.profile.hostId == h.id,
+              ))
+                Padding(
+                  padding: const EdgeInsets.only(left: 16),
+                  child: _tile(context, s),
+                ),
+              const SizedBox(height: 6),
+            ],
+            if (onAddHost != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: TextButton.icon(
+                  key: const ValueKey('add-host'),
+                  onPressed: onAddHost,
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: const Text('Add host'),
+                ),
+              ),
+            const SizedBox(height: 18),
+          ],
           const _Group('Your Claude accounts'),
           for (final s in native) _tile(context, s),
         ],
@@ -73,7 +112,7 @@ class _LoginLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (text, color) = !state.alcfAvailable
-        ? ('alcf-ai is not installed', Tok.danger)
+        ? (state.alcfMissing, Tok.danger)
         : state.alcfLoggedIn
         ? ('Signed in to ALCF', Tok.running)
         : ('Not signed in to ALCF', Tok.queued);
@@ -121,9 +160,17 @@ class _ProfileTile extends StatelessWidget {
   final void Function(ProfileStatus) onOpen;
   final void Function(ProfileStatus) onConfigure;
 
+  /// Why a local profile cannot open, or null.
+  String? get _blocked {
+    if (!status.profile.isLocal) return null;
+    final r = state.readinessOf(status.profile);
+    return r is LocalBlocked ? r.reason : null;
+  }
+
   String get _detail {
     final p = status.profile;
     if (!status.installed) return 'Not installed';
+    if (p.isLocal) return _blocked ?? 'Ready';
     if (!p.isAlcf) {
       return state.describeRoute(p).replaceFirst('Anthropic, account in ', '');
     }
@@ -182,7 +229,7 @@ class _ProfileTile extends StatelessWidget {
           ),
         IconButton(
           key: ValueKey('open-$id'),
-          tooltip: 'New session',
+          tooltip: _blocked ?? 'New session',
           onPressed: canOpen ? () => onOpen(status) : null,
           icon: const Icon(Icons.play_arrow_rounded),
         ),
