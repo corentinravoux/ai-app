@@ -167,6 +167,20 @@ void main() {
       expect(File(path).existsSync(), isFalse);
     });
 
+    test('a file that is not UTF-8 is moved aside too', () async {
+      final path = '${tmp.path}/hosts.json';
+      File(path).writeAsBytesSync([0x7b, 0xff, 0xfe, 0x7d]);
+      final r = HostRegistry(path);
+      expect(await r.load(), isEmpty);
+      expect(File(r.lastLoadRecovered!).readAsBytesSync(), [
+        0x7b,
+        0xff,
+        0xfe,
+        0x7d,
+      ]);
+      expect(recoveredNotice(r), contains('hosts.json.corrupt-'));
+    });
+
     test('load skips hosts that fail validation', () async {
       final path = '${tmp.path}/hosts.json';
       File(path).writeAsStringSync(

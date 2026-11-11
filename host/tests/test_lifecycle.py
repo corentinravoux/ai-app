@@ -61,7 +61,7 @@ class LifecycleTests(unittest.TestCase):
         self.h.cleanup()
 
     def cli(self, *args, env=None, timeout=60):
-        e = dict(self.h.env, **self.EXTRA_ENV, **(env or {}))
+        e = {**self.h.env, **self.EXTRA_ENV, **(env or {})}
         r = subprocess.run(
             [sys.executable, "-I", str(SCRIPT), *args, "--json"]
             if args[0] != "log" else [sys.executable, "-I", str(SCRIPT), *args],
@@ -146,7 +146,7 @@ class LifecycleTests(unittest.TestCase):
         self.assertFalse(alive(s1["pid"]))
 
     def _bg_start(self, recipe, *extra, env=None):
-        e = dict(self.h.env, **self.EXTRA_ENV, **(env or {}))
+        e = {**self.h.env, **self.EXTRA_ENV, **(env or {})}
         p = subprocess.Popen(
             [sys.executable, "-I", str(SCRIPT), "start", recipe, *extra, "--json"],
             env=e, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
@@ -184,6 +184,21 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(first.returncode, 0, out)
         _, st = self.cli("status")
         self.assertEqual((st["state"], st["recipe"], st["pid"]), ("ready", "r", pid))
+
+    def test_a_failing_ps_does_not_orphan_a_ready_server(self):
+        # macOS path: a transient `ps` failure must not make our server look
+        # foreign (it could then never be stopped or switched).
+        code, s = self.cli("start", "r")
+        self.assertEqual(code, 0, s)
+        bad = self.h.root / "bin"
+        bad.mkdir()
+        (bad / "ps").write_text("#!/bin/sh\nexit 1\n")
+        (bad / "ps").chmod(0o755)
+        env = {"LLM_HOST_NO_PROC": "1", "PATH": f"{bad}:{os.environ['PATH']}"}
+        _, st = self.cli("status", env=env)
+        self.assertEqual(st["state"], "ready")
+        _, st = self.cli("status")
+        self.assertEqual((st["state"], st["pid"]), ("ready", s["pid"]))
 
     def test_two_starts_at_once_do_not_steal_each_other(self):
         first = self._bg_start("r", "--wait", "60", env={"FAKE_BOOT_SECONDS": "3"})

@@ -130,18 +130,48 @@ void main() {
     ]);
   });
 
-  test('agentPath on macOS adds Homebrew folders that exist', () {
+  test('agentPath on macOS puts Homebrew folders first', () {
+    // Before /usr/bin: python3 must be Homebrew's (>= 3.11), not Apple's 3.9.
+    final tmp = Directory.systemTemp.createTempSync('aiapp_brew_');
+    addTearDown(() => tmp.deleteSync(recursive: true));
     final p = agentPathFor(
       {'PATH': '/usr/bin:/bin'},
       '/nonexistent-home',
       HostOs.macos,
+      macExtraDirs: [tmp.path, '/nonexistent-brew'],
     );
-    final parts = p.split(':');
-    expect(parts.take(2), ['/usr/bin', '/bin']);
-    for (final d in parts.skip(2)) {
-      expect(['/opt/homebrew/bin', '/usr/local/bin'], contains(d));
-    }
+    expect(p.split(':'), [tmp.path, '/usr/bin', '/bin']);
     expect(kMacExtraBinDirs, ['/opt/homebrew/bin', '/usr/local/bin']);
+  });
+
+  test('ssh control sockets live in a short folder', () {
+    expect(
+      sshControlDir({'HOME': '/Users/corentin'}, HostOs.macos),
+      '/Users/corentin/.ssh/ai-app',
+    );
+    expect(
+      sshControlDir({'HOME': '/home/c'}, HostOs.linux),
+      '/home/c/.ssh/ai-app',
+    );
+    // sun_path is 104 bytes on macOS: dir + '/' + %C (40) + ssh's temp suffix (17).
+    final macPath = sshControlDir({
+      'HOME': '/Users/a-rather-long-name',
+    }, HostOs.macos);
+    expect(macPath.length + 1 + 40 + 17, lessThan(104));
+  });
+
+  test('Windows keeps one PATH key whatever its case', () {
+    final env = normalizePathKey({
+      'Path': r'C:\A',
+      'Other': 'x',
+    }, HostOs.windows);
+    expect(env.keys.where((k) => k.toUpperCase() == 'PATH'), ['PATH']);
+    expect(env['PATH'], r'C:\A');
+    final posix = normalizePathKey({
+      'PATH': '/bin',
+      'Path': 'odd',
+    }, HostOs.linux);
+    expect(posix, {'PATH': '/bin', 'Path': 'odd'});
   });
 
   test('currentOs matches the test machine', () {
