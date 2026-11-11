@@ -17,7 +17,10 @@ export default function (pi: ExtensionAPI) {
       url: Type.String({ description: "The page URL, starting with http:// or https://" }),
     }),
     async execute(toolCallId, params, signal, onUpdate, ctx) {
-      const r = await pi.exec("webread", [params.url], { signal, timeout: 30000 });
+      // Windows: webread is webread.cmd, which needs cmd.exe to run.
+      const r = process.platform === "win32"
+        ? await pi.exec("cmd", ["/c", "webread", params.url], { signal, timeout: 30000 })
+        : await pi.exec("webread", [params.url], { signal, timeout: 30000 });
       const text = r.code === 0 ? r.stdout : (r.stderr || `webread exited with code ${r.code}`);
       return { content: [{ type: "text", text }], details: {} };
     },

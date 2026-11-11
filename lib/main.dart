@@ -10,6 +10,7 @@ import 'core/guard.dart';
 import 'core/host_client.dart';
 import 'core/hosts.dart';
 import 'core/launch.dart';
+import 'core/platform_paths.dart';
 import 'core/profiles.dart';
 import 'core/pty.dart';
 import 'core/runner.dart';
@@ -20,7 +21,8 @@ import 'ui/home_page.dart';
 import 'ui/theme.dart';
 
 Future<void> main() async {
-  final realHome = Platform.environment['HOME']!;
+  final os = currentOs();
+  final realHome = homeDir(Platform.environment, os);
   // Agents installed in ~/.opencode/bin and the like are often missing from
   // a desktop session's PATH: add them for lookup, configure and launch.
   final env = {
@@ -35,8 +37,12 @@ Future<void> main() async {
   await store.load();
   final accounts = store.accounts ?? detectClaudeAccounts(realHome);
 
-  final alcfExe = whichOnPath('alcf-ai', env);
-  final tokensExe = whichOnPath('alcf-tokens', env);
+  // alcf-ai is redirected by setting HOME and finds its login through a
+  // symlink: both POSIX-only, so ALCF is off on Windows.
+  final alcfExe = os == HostOs.windows ? null : whichOnPath('alcf-ai', env);
+  final tokensExe = os == HostOs.windows
+      ? null
+      : whichOnPath('alcf-tokens', env);
 
   final alcf = (alcfExe == null || tokensExe == null)
       ? null
@@ -57,8 +63,10 @@ Future<void> main() async {
 
   // Model hosts (docs/hosts.md): this machine when llm-host is installed,
   // plus the hosts added in the app.
-  final dataRoot = '$realHome/.local/share/ai-app';
-  final registry = HostRegistry('$realHome/.config/ai-app/hosts.json');
+  final dataRoot = '${dataHome(Platform.environment, os)}/ai-app';
+  final registry = HostRegistry(
+    '${configHome(Platform.environment, os)}/ai-app/hosts.json',
+  );
   var hosts = await registry.load();
   if (hosts.isEmpty) {
     final here = defaultLocalHost((exe) => whichOnPath(exe, env));
@@ -70,7 +78,7 @@ Future<void> main() async {
   final sshExe = whichOnPath('ssh', env);
   final controlDir = '$dataRoot/ssh';
   await Directory(controlDir).create(recursive: true);
-  await Process.run('chmod', ['700', controlDir]);
+  if (os != HostOs.windows) await Process.run('chmod', ['700', controlDir]);
   final claudeDirs = [for (final a in accounts) a.dir];
 
   // New sessions start in the last folder used, else the home folder.
@@ -93,6 +101,7 @@ Future<void> main() async {
       runner: const IoRunner(),
       sshExe: sshExe ?? 'ssh',
       controlDir: controlDir,
+      controlMaster: supportsSshControlMaster(os),
     ),
     tunnels: TunnelManager(
       start: startIoProc,
@@ -101,6 +110,9 @@ Future<void> main() async {
     ),
     dataRoot: dataRoot,
     sshAvailable: sshExe != null,
+    alcfMissing: os == HostOs.windows
+        ? 'ALCF needs Linux or macOS'
+        : 'alcf-ai is not installed',
     guardPaths: RealConfigGuard.defaultPaths(realHome, claudeDirs),
     guardedRoots: [
       '$realHome/.claude',

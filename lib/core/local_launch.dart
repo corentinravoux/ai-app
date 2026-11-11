@@ -3,6 +3,7 @@ import 'host_client.dart';
 import 'hosts.dart';
 import 'launch.dart';
 import 'local_config.dart';
+import 'platform_paths.dart';
 import 'profiles.dart';
 
 /// Pi, OpenCode and Claude Code for every model host, in that order.
@@ -127,7 +128,7 @@ Future<LaunchSpec> buildLocalLaunch(
     'PATH': [
       toolsBinDir,
       if ((parentEnv['PATH'] ?? '').isNotEmpty) parentEnv['PATH']!,
-    ].join(':'),
+    ].join(pathSep(currentOs())),
     'TERM': 'xterm-256color',
   };
   return LaunchSpec(

@@ -136,6 +136,7 @@ class HostClient {
     required this.runner,
     required this.sshExe,
     required this.controlDir,
+    this.controlMaster = true,
   });
 
   final Runner runner;
@@ -150,13 +151,23 @@ class HostClient {
   /// llm-host start waits up to 600 s for the server; leave it room.
   static const _start = Duration(seconds: 630);
 
+  /// False where ssh has no ControlMaster (Windows): each call connects.
+  final bool controlMaster;
+
   List<String> commandFor(ModelHost h, List<String> args) => switch (h.kind) {
     HostKind.local => [h.llmHostCmd, ...args],
     HostKind.ssh => [
       sshExe,
-      ...kSshOptions,
-      '-o',
-      'ControlPath=$controlDir/%C',
+      if (controlMaster) ...[
+        ...kSshOptions,
+        '-o',
+        'ControlPath=$controlDir/%C',
+      ] else
+        for (var i = 0; i < kSshOptions.length; i += 2)
+          if (!kSshOptions[i + 1].startsWith('Control')) ...[
+            kSshOptions[i],
+            kSshOptions[i + 1],
+          ],
       h.sshTarget!,
       '--',
       h.llmHostCmd,

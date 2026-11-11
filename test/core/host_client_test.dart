@@ -253,4 +253,20 @@ void main() {
     expect((a as HostFailed).message, contains('unknown format'));
     expect(await client(r).recipes(local), isA<HostFailed<List<Recipe>>>());
   });
+
+  test('without ControlMaster (Windows) no control options are passed', () {
+    final c = HostClient(
+      runner: FakeRunner(),
+      sshExe: 'ssh',
+      controlDir: '/c',
+      controlMaster: false,
+    ).commandFor(pc, ['status', '--json']);
+    expect(c.where((a) => a.startsWith('Control')), isEmpty);
+    expect(c, containsAllInOrder(['BatchMode=yes', 'me@pc', '--', 'llm-host']));
+  });
+
+  test('dead links are noticed within about 15 s', () {
+    expect(kSshOptions, containsAllInOrder(['-o', 'ServerAliveInterval=5']));
+    expect(kSshOptions, containsAllInOrder(['-o', 'ServerAliveCountMax=3']));
+  });
 }
