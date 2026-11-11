@@ -211,6 +211,22 @@ void main() {
       expect(n, contains(r.lastLoadRecovered!));
     });
 
+    test('a backup that cannot be written does not stop the load', () async {
+      final dir = Directory('${tmp.path}/ro')..createSync();
+      final path = '${dir.path}/hosts.json';
+      File(path).writeAsStringSync(
+        jsonEncode({
+          'hosts': [ssh(target: '').toJson(), local().toJson()],
+        }),
+      );
+      Process.runSync('chmod', ['555', dir.path]);
+      addTearDown(() => Process.runSync('chmod', ['755', dir.path]));
+      final r = HostRegistry(path);
+      expect((await r.load()).map((h) => h.id), ['local']);
+      expect(r.lastLoadDropped, 1);
+      expect(r.lastLoadRecovered, isNull);
+    });
+
     test('a clean file makes no backup', () async {
       final path = '${tmp.path}/hosts.json';
       File(path).writeAsStringSync(

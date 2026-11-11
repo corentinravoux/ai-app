@@ -39,7 +39,9 @@ export default function (pi: ExtensionAPI) {
           return { content: [{ type: "text", text: "webread is not on PATH" }], details: {} };
         }
         r = await pi.exec("py", ["-3", script, params.url], opts);
-        if (r.code !== 0 && /not found|ENOENT|not recognized/i.test(r.stderr ?? "")) {
+        // Only when py itself is missing (pi.exec does not use a shell, so
+        // that is exactly "spawn py ENOENT"); never when webread failed.
+        if (r.code !== 0 && /^spawn py ENOENT/.test(r.stderr ?? "")) {
           r = await pi.exec("python", [script, params.url], opts);
         }
       } else {
