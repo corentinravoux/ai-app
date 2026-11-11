@@ -224,6 +224,308 @@ def build_command(cfg: Config, r: Recipe) -> list[str]:
     return cmd + list(r.args)
 
 
+# ------------------------------------------------------------- lifecycle
+
+EXIT_OK, EXIT_FAILED, EXIT_RUNNING, EXIT_FOREIGN, EXIT_UNKNOWN = 0, 3, 4, 5, 6
+
+
+class State:
+    """Files under state_dir: server.pid, state.json, server.log."""
+
+    def __init__(self, cfg: Config):
+        self.cfg = cfg
+        self.dir = pathlib.Path(cfg.state_dir)
+        self.pidfile = self.dir / "server.pid"
+        self.jsonfile = self.dir / "state.json"
+        self.log = self.dir / "server.log"
+
+    def pid(self) -> int | None:
+        try:
+            return int(self.pidfile.read_text().strip())
+        except (OSError, ValueError):
+            return None
+
+    def info(self) -> dict:
+        try:
+            v = json.loads(self.jsonfile.read_text())
+            return v if isinstance(v, dict) else {}
+        except (OSError, ValueError):
+            return {}
+
+    def write_info(self, info: dict) -> None:
+        self.dir.mkdir(parents=True, exist_ok=True)
+        tmp = self.jsonfile.with_suffix(".tmp")
+        tmp.write_text(json.dumps(info))
+        os.replace(tmp, self.jsonfile)
+
+    def tail(self, n: int) -> str:
+        try:
+            lines = self.log.read_text(errors="replace").splitlines()
+        except OSError:
+            return ""
+        return "\n".join(lines[-n:])
+
+
+def is_ours(cfg: Config, pid: int | None) -> bool:
+    """A live process whose command line runs server_bin: directly, as the
+    script of an interpreter, or through `/usr/bin/env interpreter script`
+    (a shebang, while env has not yet exec'd). Zombies and reused pids do
+    not count."""
+    if not pid:
+        return False
+    try:
+        raw = pathlib.Path(f"/proc/{pid}/cmdline").read_bytes()
+    except OSError:
+        return False
+    argv = [a.decode(errors="replace") for a in raw.split(b"\0") if a]
+    real = os.path.realpath(cfg.server_bin)
+    return any(os.path.realpath(a) == real for a in argv[:3])
+
+
+def _http(port: int, path: str, timeout: float = 2.0) -> tuple[int, bytes] | None:
+    """(status, body), or None when nothing answers on the port."""
+    import http.client
+
+    try:
+        c = http.client.HTTPConnection("127.0.0.1", port, timeout=timeout)
+        c.request("GET", path)
+        r = c.getresponse()
+        body = r.read()
+        c.close()
+        return r.status, body
+    except (OSError, http.client.HTTPException):
+        return None
+
+
+def _props_ctx(port: int) -> int | None:
+    r = _http(port, "/props")
+    if not r or r[0] != 200:
+        return None
+    try:
+        n = json.loads(r[1])["default_generation_settings"]["n_ctx"]
+        return n if isinstance(n, int) and n > 0 else None
+    except (ValueError, KeyError, TypeError):
+        return None
+
+
+def gpu_info() -> dict | None:
+    import shutil
+    import subprocess
+
+    exe = shutil.which("nvidia-smi")
+    if not exe:
+        return None
+    try:
+        r = subprocess.run(
+            [exe, "--query-gpu=name,memory.used,memory.total", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=10,
+        )
+        name, used, total = [x.strip() for x in r.stdout.splitlines()[0].split(",")]
+        return {"name": name, "used_mib": int(used), "total_mib": int(total)}
+    except (OSError, ValueError, IndexError, subprocess.SubprocessError):
+        return None
+
+
+def compute_status(cfg: Config) -> dict:
+    import socket
+
+    st = State(cfg)
+    info = st.info()
+    pid = st.pid()
+    ours = is_ours(cfg, pid)
+    health = _http(cfg.port, "/health")
+    out = {
+        "schema": SCHEMA,
+        "host": socket.gethostname().split(".")[0],
+        "state": "stopped",
+        "recipe": None,
+        "label": None,
+        "alias": None,
+        "ctx": None,
+        "max_output": None,
+        "vision": False,
+        "port": cfg.port,
+        "pid": None,
+        "started": None,
+        "gpu": gpu_info(),
+        "error": None,
+    }
+    recipe_fields = {
+        "recipe": info.get("recipe"),
+        "label": info.get("label"),
+        "alias": info.get("recipe"),
+        "ctx": info.get("ctx"),
+        "max_output": info.get("max_output"),
+        "vision": bool(info.get("vision")),
+        "started": info.get("started"),
+    }
+    if ours:
+        out.update(recipe_fields, pid=pid)
+        if health and health[0] == 200:
+            out["state"] = "ready"
+            out["ctx"] = _props_ctx(cfg.port) or out["ctx"]
+        else:
+            out["state"] = "loading"
+        return out
+    if pid is not None:
+        st.pidfile.unlink(missing_ok=True)  # stale: process gone or not ours
+    if health is not None:
+        out["state"] = "foreign"
+        out["error"] = f"a llama-server not started by llm-host is using port {cfg.port}"
+        return out
+    if info.get("recipe") and not info.get("stopped"):
+        out.update(recipe_fields, state="error")
+        out["error"] = info.get("error") or st.tail(20) or "the server exited"
+    return out
+
+
+def _terminate(pid: int) -> None:
+    import signal
+    import time
+
+    for sig, wait in ((signal.SIGTERM, 15.0), (signal.SIGKILL, 5.0)):
+        try:
+            os.killpg(pid, sig)
+        except ProcessLookupError:
+            return
+        except PermissionError:
+            os.kill(pid, sig)
+        end = time.monotonic() + wait
+        while time.monotonic() < end:
+            try:
+                done, _ = os.waitpid(pid, os.WNOHANG)
+                if done:
+                    return
+            except ChildProcessError:
+                if not pathlib.Path(f"/proc/{pid}").exists() or _zombie(pid):
+                    return
+            time.sleep(0.1)
+
+
+def _zombie(pid: int) -> bool:
+    try:
+        stat = pathlib.Path(f"/proc/{pid}/stat").read_text()
+        return stat.rsplit(") ", 1)[1].split()[0] == "Z"
+    except (OSError, IndexError):
+        return True
+
+
+def stop_server(cfg: Config) -> None:
+    st = State(cfg)
+    pid = st.pid()
+    if is_ours(cfg, pid):
+        _terminate(pid)
+    st.pidfile.unlink(missing_ok=True)
+    info = st.info()
+    if info:
+        info["stopped"] = True
+        info.pop("error", None)
+        st.write_info(info)
+
+
+def _status_text(s: dict) -> str:
+    if s["state"] == "ready":
+        return f"ready: {s['label']} ({s['recipe']}), {s['ctx']} tokens, port {s['port']}"
+    if s["state"] == "loading":
+        return f"loading {s['label']} ({s['recipe']})"
+    if s["state"] in ("error", "foreign"):
+        return f"{s['state']}: {s['error']}"
+    return f"stopped (port {s['port']})"
+
+
+def cmd_status(cfg: Config, a: argparse.Namespace) -> int:
+    s = compute_status(cfg)
+    _print(s, a.json, _status_text(s))
+    return EXIT_OK
+
+
+def cmd_stop(cfg: Config, a: argparse.Namespace) -> int:
+    s = compute_status(cfg)
+    if s["state"] == "foreign":
+        _print(s, a.json, _status_text(s))
+        return EXIT_FOREIGN
+    stop_server(cfg)
+    s = compute_status(cfg)
+    _print(s, a.json, _status_text(s))
+    return EXIT_OK
+
+
+def cmd_start(cfg: Config, a: argparse.Namespace) -> int:
+    import datetime
+    import subprocess
+    import time
+
+    def fail(code: int, msg: str) -> int:
+        s = compute_status(cfg)
+        if code == EXIT_UNKNOWN:
+            s["error"] = msg
+        _print(s, a.json, msg)
+        return code
+
+    recipes, invalid = load_recipes(cfg)
+    r = next((x for x in recipes if x.name == a.recipe), None)
+    if r is None:
+        bad = next((e for e in invalid if e.name == a.recipe), None)
+        return fail(EXIT_UNKNOWN, f"invalid recipe {a.recipe}: {bad.reason}" if bad
+                    else f"unknown recipe {a.recipe}")
+    if not r.model_present:
+        return fail(EXIT_UNKNOWN, f"model file missing for {r.name}: {cfg.models_dir}/{r.model}")
+    s = compute_status(cfg)
+    if s["state"] == "foreign":
+        return fail(EXIT_FOREIGN, s["error"])
+    if s["state"] in ("ready", "loading"):
+        if not a.replace:
+            return fail(EXIT_RUNNING, f"{s['recipe']} is already running: use --replace")
+        stop_server(cfg)
+
+    st = State(cfg)
+    st.dir.mkdir(parents=True, exist_ok=True)
+    started = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+    with open(st.log, "wb") as log:
+        p = subprocess.Popen(
+            build_command(cfg, r), stdout=log, stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL, start_new_session=True, close_fds=True,
+        )
+    st.pidfile.write_text(str(p.pid))
+    st.write_info({
+        "recipe": r.name, "label": r.label, "ctx": r.ctx, "max_output": r.max_output,
+        "vision": r.vision, "started": started, "stopped": False,
+    })
+
+    end = time.monotonic() + max(a.wait, 0)
+    while True:
+        if p.poll() is not None:
+            st.pidfile.unlink(missing_ok=True)
+            info = st.info()
+            info["error"] = st.tail(20) or f"llama-server exited with code {p.returncode}"
+            st.write_info(info)
+            s = compute_status(cfg)
+            _print(s, a.json, _status_text(s))
+            return EXIT_FAILED
+        s = compute_status(cfg)
+        if s["state"] == "ready" or a.wait <= 0:
+            _print(s, a.json, _status_text(s))
+            return EXIT_OK
+        if time.monotonic() >= end:
+            _terminate(p.pid)
+            st.pidfile.unlink(missing_ok=True)
+            info = st.info()
+            info["error"] = (f"llama-server did not become ready within {a.wait:g} s\n"
+                             + st.tail(20))
+            st.write_info(info)
+            s = compute_status(cfg)
+            _print(s, a.json, _status_text(s))
+            return EXIT_FAILED
+        time.sleep(0.25)
+
+
+def cmd_log(cfg: Config, a: argparse.Namespace) -> int:
+    text = State(cfg).tail(max(a.n, 1))
+    if text:
+        print(text)
+    return EXIT_OK
+
+
 # ------------------------------------------------------------------ CLI
 
 
@@ -254,14 +556,24 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("list", help="list recipes")
     s.add_argument("--json", action="store_true")
     s.set_defaults(func=cmd_list)
-    _add_lifecycle(sub)
+    s = sub.add_parser("status", help="state of the server on the port")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(func=cmd_status)
+    s = sub.add_parser("start", help="start a recipe")
+    s.add_argument("recipe")
+    s.add_argument("--replace", action="store_true", help="stop the running server first")
+    s.add_argument("--wait", type=float, default=300.0, help="seconds to wait for ready (0: return at once)")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(func=cmd_start)
+    s = sub.add_parser("stop", help="stop the server llm-host started")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(func=cmd_stop)
+    s = sub.add_parser("log", help="tail of the server log")
+    s.add_argument("-n", type=int, default=80)
+    s.set_defaults(func=cmd_log)
     a = p.parse_args(argv)
     cfg = load_config(a.config, os.environ)
     return a.func(cfg, a)
-
-
-def _add_lifecycle(sub) -> None:
-    """Hook for the server commands (status, start, stop, log)."""
 
 
 if __name__ == "__main__":
