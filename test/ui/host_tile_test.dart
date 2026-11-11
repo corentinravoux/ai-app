@@ -512,6 +512,32 @@ void main() {
     expect(state.tabs, isEmpty);
   });
 
+  testWidgets('Probe shows each check', (tester) async {
+    final state = makeState(hosts: const [local]);
+    runner.handlers['llm-host probe'] = (_) => RunResult(
+      0,
+      jsonEncode({
+        'schema': 1,
+        'ok': true,
+        'checks': [
+          {
+            'name': 'tool_call',
+            'ok': true,
+            'detail': 'get_weather({"city": "Paris"})',
+          },
+          {'name': 'generation', 'ok': true, 'detail': '38.2 tok/s'},
+        ],
+        'error': null,
+      }),
+      '',
+    );
+    await pump(tester, state);
+    await tester.tap(find.byKey(const ValueKey('host-probe-local')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('PASS  tool_call'), findsOneWidget);
+    expect(find.textContaining('38.2 tok/s'), findsOneWidget);
+  });
+
   testWidgets('existing ALCF and account sections are still there', (
     tester,
   ) async {
