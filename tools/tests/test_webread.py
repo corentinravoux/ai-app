@@ -18,6 +18,9 @@ PAGES = {
     "/long": ("text/html", ("<html><head><title>Long</title></head><body>" + LONG + "</body></html>").encode()),
     "/png": ("image/png", b"\x89PNG\r\n\x1a\n...."),
     "/latin": ("text/html; charset=iso-8859-1", "<html><body><p>café</p></body></html>".encode("latin-1")),
+    "/nohead": ("text/html", b"<head><title>Example</title><meta charset=utf-8>"
+                b"<script>var hidden = 1;</script><body><p>Visible text</p>"),
+    "/nobody": ("text/html", b"<html><head><title>T</title><p>No body tag</p>"),
     "/meta": ("text/html", '<html><head><meta charset="iso-8859-1"></head><body><p>déjà</p></body></html>'.encode("latin-1")),
     "/json": ("application/json", b'{"a": 1}'),
 }
@@ -71,6 +74,15 @@ class WebreadTests(unittest.TestCase):
         self.assertIn("Heading", r.stdout)
         for gone in ("secret", "color:red", "menu menu", "svgtext"):
             self.assertNotIn(gone, r.stdout)
+
+    def test_head_without_end_tag_keeps_the_body(self):
+        r = self.run_wr(self.base + "/nohead")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout.splitlines()[0], "Example")
+        self.assertIn("Visible text", r.stdout)
+        self.assertNotIn("hidden", r.stdout)
+        r = self.run_wr(self.base + "/nobody")
+        self.assertIn("No body tag", r.stdout)
 
     def test_long_page_is_capped(self):
         r = self.run_wr(self.base + "/long", "--max-chars", "3000")
