@@ -20,7 +20,8 @@ List<Profile> localProfiles(List<ModelHost> hosts) => [
 ];
 
 /// Removed from local tabs on top of [kStrippedEnvKeys] and every
-/// `ANTHROPIC_*`: switches that send Claude Code to a cloud provider.
+/// `ANTHROPIC_*`: switches that send Claude Code to a cloud provider, and
+/// OpenCode config injected through the environment.
 /// Native tabs keep them (a user may run their account through Bedrock).
 const kLocalStrippedEnvKeys = [
   'CLAUDE_CODE_USE_BEDROCK',
@@ -28,6 +29,10 @@ const kLocalStrippedEnvKeys = [
   'CLAUDE_CODE_USE_FOUNDRY',
   'AWS_BEARER_TOKEN_BEDROCK',
   'ANTHROPIC_VERTEX_PROJECT_ID',
+  // OpenCode merges these over OPENCODE_CONFIG: a shell that set them must
+  // not reroute a local tab.
+  'OPENCODE_CONFIG_CONTENT',
+  'OPENCODE_CONFIG_DIR',
 ];
 
 String _short(AgentKind k) => switch (k) {

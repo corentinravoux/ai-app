@@ -184,6 +184,22 @@ void main() {
       },
     );
 
+    test('local OpenCode ignores config injected from the parent', () async {
+      parent.addAll({
+        'OPENCODE_CONFIG_CONTENT': '{"model": "evil/x"}',
+        'OPENCODE_CONFIG_DIR': '/elsewhere',
+      });
+      addTearDown(
+        () => parent.removeWhere((k, _) => k.startsWith('OPENCODE_CONFIG_')),
+      );
+      for (final k in [AgentKind.claude, AgentKind.pi, AgentKind.opencode]) {
+        final s = await launch(k);
+        expect(s.env.containsKey('OPENCODE_CONFIG_CONTENT'), isFalse);
+        expect(s.env.containsKey('OPENCODE_CONFIG_DIR'), isFalse);
+      }
+      expect(kLocalStrippedEnvKeys, contains('OPENCODE_CONFIG_CONTENT'));
+    });
+
     test('local tabs drop cloud-provider switches', () async {
       parent.addAll({
         'CLAUDE_CODE_USE_BEDROCK': '1',
