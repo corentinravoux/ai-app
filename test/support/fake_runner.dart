@@ -1,4 +1,4 @@
-import 'package:alcfai_app/core/runner.dart';
+import 'package:ai_app/core/runner.dart';
 
 class Call {
   Call(this.exe, this.args, this.env);

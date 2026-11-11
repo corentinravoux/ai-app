@@ -1,15 +1,15 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:alcfai_app/app/app_state.dart';
-import 'package:alcfai_app/core/alcf_cli.dart';
-import 'package:alcfai_app/core/app_store.dart';
-import 'package:alcfai_app/core/guard.dart';
-import 'package:alcfai_app/core/profiles.dart';
-import 'package:alcfai_app/core/runner.dart';
-import 'package:alcfai_app/core/sandbox.dart';
-import 'package:alcfai_app/ui/configure_dialog.dart';
-import 'package:alcfai_app/ui/theme.dart';
+import 'package:ai_app/app/app_state.dart';
+import 'package:ai_app/core/alcf_cli.dart';
+import 'package:ai_app/core/app_store.dart';
+import 'package:ai_app/core/guard.dart';
+import 'package:ai_app/core/profiles.dart';
+import 'package:ai_app/core/runner.dart';
+import 'package:ai_app/core/sandbox.dart';
+import 'package:ai_app/ui/configure_dialog.dart';
+import 'package:ai_app/ui/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -38,7 +38,7 @@ void main() {
   late AppState state;
 
   setUp(() {
-    tmp = Directory.systemTemp.createTempSync('alcfai_cfg_');
+    tmp = Directory.systemTemp.createTempSync('aiapp_cfg_');
     realHome = '${tmp.path}/home';
     Directory('$realHome/.globus').createSync(recursive: true);
     Directory('$realHome/.claude/plugins').createSync(recursive: true);

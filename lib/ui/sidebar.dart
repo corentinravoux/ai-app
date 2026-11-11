@@ -37,7 +37,7 @@ class Sidebar extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Text(
-              'ALCF AI',
+              'AI App',
               style: Theme.of(context).textTheme.titleMedium
                   ?.copyWith(fontSize: 17),
             ),

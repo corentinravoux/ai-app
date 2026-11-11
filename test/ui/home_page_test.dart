@@ -1,18 +1,18 @@
 import 'dart:io';
 
-import 'package:alcfai_app/ui/sidebar.dart';
-import 'package:alcfai_app/app/app_state.dart';
-import 'package:alcfai_app/app/layout.dart';
-import 'package:alcfai_app/core/alcf_cli.dart';
-import 'package:alcfai_app/core/app_store.dart';
-import 'package:alcfai_app/core/guard.dart';
-import 'package:alcfai_app/core/launch.dart';
-import 'package:alcfai_app/core/profiles.dart';
-import 'package:alcfai_app/core/runner.dart';
-import 'package:alcfai_app/core/sandbox.dart';
-import 'package:alcfai_app/ui/home_page.dart';
-import 'package:alcfai_app/ui/terminal_tab.dart';
-import 'package:alcfai_app/ui/theme.dart';
+import 'package:ai_app/ui/sidebar.dart';
+import 'package:ai_app/app/app_state.dart';
+import 'package:ai_app/app/layout.dart';
+import 'package:ai_app/core/alcf_cli.dart';
+import 'package:ai_app/core/app_store.dart';
+import 'package:ai_app/core/guard.dart';
+import 'package:ai_app/core/launch.dart';
+import 'package:ai_app/core/profiles.dart';
+import 'package:ai_app/core/runner.dart';
+import 'package:ai_app/core/sandbox.dart';
+import 'package:ai_app/ui/home_page.dart';
+import 'package:ai_app/ui/terminal_tab.dart';
+import 'package:ai_app/ui/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -77,7 +77,7 @@ void main() {
   }
 
   setUp(() {
-    tmp = Directory.systemTemp.createTempSync('alcfai_home_');
+    tmp = Directory.systemTemp.createTempSync('aiapp_home_');
     realHome = '${tmp.path}/home';
     Directory('$realHome/.globus').createSync(recursive: true);
     sb = Sandbox(

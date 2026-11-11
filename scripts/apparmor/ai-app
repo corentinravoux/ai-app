@@ -1,4 +1,4 @@
-# AppArmor profile for the ALCF AI desktop app.
+# AppArmor profile for the AI App desktop app.
 #
 # Ubuntu 23.10+ sets kernel.apparmor_restrict_unprivileged_userns=1: an
 # unconfined program that creates a user namespace loses its capabilities
@@ -10,8 +10,8 @@
 abi <abi/4.0>,
 include <tunables/global>
 
-profile alcfai-app @{HOME}/.local/opt/alcfai-app/alcfai_app flags=(unconfined) {
+profile ai-app @{HOME}/.local/opt/ai-app/ai_app flags=(unconfined) {
   userns,
 
-  include if exists <local/alcfai-app>
+  include if exists <local/ai-app>
 }

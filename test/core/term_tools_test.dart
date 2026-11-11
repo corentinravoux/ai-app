@@ -1,4 +1,4 @@
-import 'package:alcfai_app/core/term_tools.dart';
+import 'package:ai_app/core/term_tools.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xterm/xterm.dart';
 

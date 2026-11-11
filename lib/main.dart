@@ -67,7 +67,7 @@ Future<void> main() async {
     store: store,
   );
 
-  runApp(AlcfaiApp(state: state, onConfigure: showConfigureDialog));
+  runApp(AiApp(state: state, onConfigure: showConfigureDialog));
   sandbox.ensure().then((_) => state.refresh());
   state.startLoginChecks();
 }
@@ -87,15 +87,15 @@ String _uvCacheDir(Map<String, String> env, String realHome) {
   return '$realHome/.cache/uv';
 }
 
-class AlcfaiApp extends StatelessWidget {
-  const AlcfaiApp({super.key, required this.state, this.onConfigure});
+class AiApp extends StatelessWidget {
+  const AiApp({super.key, required this.state, this.onConfigure});
 
   final AppState state;
   final ConfigureAction? onConfigure;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: 'ALCF AI',
+    title: 'AI App',
     debugShowCheckedModeBanner: false,
     theme: buildTheme(),
     home: HomePage(state: state, onConfigure: onConfigure),
