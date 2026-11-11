@@ -54,6 +54,7 @@ class IoRunner implements Runner {
     } on TimeoutException {
       p.kill(ProcessSignal.sigkill);
       await p.exitCode;
+      err.finish(); // its text is replaced by the timeout message
       return RunResult(
         124,
         await out.text(),
@@ -67,14 +68,22 @@ class IoRunner implements Runner {
 /// short grace for the end of the stream, then returns what came: a
 /// grandchild left running (a background job, ssh's ControlMaster) may keep
 /// the pipe open after the command itself has exited.
+///
+/// Once the text is taken (or [finish] is called) later output is drained
+/// and dropped: the pipe stays read, so the grandchild never blocks on it,
+/// but nothing is kept for a result that has already been returned.
 class _Collector {
   _Collector(Stream<List<int>> s) {
     s
         .transform(const Utf8Decoder(allowMalformed: true))
-        .listen(_buf.write, onDone: _done.complete, onError: (_) {});
+        .listen(
+          (d) => _buf?.write(d),
+          onDone: _done.complete,
+          onError: (_) {},
+        );
   }
 
-  final _buf = StringBuffer();
+  StringBuffer? _buf = StringBuffer();
   final _done = Completer<void>();
 
   Future<String> text() async {
@@ -82,6 +91,11 @@ class _Collector {
       const Duration(milliseconds: 300),
       onTimeout: () {},
     );
-    return _buf.toString();
+    final t = _buf?.toString() ?? '';
+    finish();
+    return t;
   }
+
+  /// Stops keeping output; what is already collected is dropped.
+  void finish() => _buf = null;
 }
