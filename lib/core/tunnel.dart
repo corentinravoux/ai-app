@@ -137,6 +137,7 @@ class TunnelManager {
     'ControlPath=none',
     '-L',
     '127.0.0.1:${h.localPort}:127.0.0.1:${h.serverPort}',
+    '--',
     h.sshTarget!,
   ];
 

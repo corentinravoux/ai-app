@@ -238,10 +238,13 @@ String _resolveExisting(String path) {
 Future<void> _writeJson(String path, Map<String, dynamic> v) =>
     _writeText(path, const JsonEncoder.withIndent('  ').convert(v));
 
+int _tmpCounter = 0;
+
 /// Temp file + rename; a symlink at [path] is replaced, never followed.
 Future<void> _writeText(String path, String text) async {
   if (await FileSystemEntity.isLink(path)) await Link(path).delete();
-  final tmp = File('$path.tmp');
+  // A temp name of its own: two tabs opening at once must not collide.
+  final tmp = File('$path.$pid.${_tmpCounter++}.tmp');
   await tmp.writeAsString(text);
   await tmp.rename(path);
 }

@@ -45,19 +45,43 @@ class IoRunner implements Runner {
       return RunResult(127, '', e.message);
     }
     p.stdin.close().ignore();
-    final out = p.stdout.transform(utf8.decoder).join();
-    final err = p.stderr.transform(utf8.decoder).join();
+    final out = _Collector(p.stdout);
+    final err = _Collector(p.stderr);
     final limit = timeout ?? this.timeout;
     try {
       final code = await p.exitCode.timeout(limit);
-      return RunResult(code, await out, await err);
+      return RunResult(code, await out.text(), await err.text());
     } on TimeoutException {
       p.kill(ProcessSignal.sigkill);
       await p.exitCode;
-      // A grandchild may keep the pipes open: do not wait for it.
-      const grace = Duration(milliseconds: 200);
-      final o = await out.timeout(grace, onTimeout: () => '');
-      return RunResult(124, o, 'timed out after ${limit.inSeconds} s');
+      return RunResult(
+        124,
+        await out.text(),
+        'timed out after ${limit.inSeconds} s',
+      );
     }
+  }
+}
+
+/// Collects a process stream as text while it arrives. [text] waits a
+/// short grace for the end of the stream, then returns what came: a
+/// grandchild left running (a background job, ssh's ControlMaster) may keep
+/// the pipe open after the command itself has exited.
+class _Collector {
+  _Collector(Stream<List<int>> s) {
+    s
+        .transform(const Utf8Decoder(allowMalformed: true))
+        .listen(_buf.write, onDone: _done.complete, onError: (_) {});
+  }
+
+  final _buf = StringBuffer();
+  final _done = Completer<void>();
+
+  Future<String> text() async {
+    await _done.future.timeout(
+      const Duration(milliseconds: 300),
+      onTimeout: () {},
+    );
+    return _buf.toString();
   }
 }

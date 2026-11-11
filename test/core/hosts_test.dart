@@ -155,4 +155,55 @@ void main() {
     // PATH still runs it.
     expect(h.llmHostCmd, '/x/llm-host');
   });
+
+  group('recovery and seeding', () {
+    test('a corrupt file is moved aside', () async {
+      final path = '${tmp.path}/hosts.json';
+      File(path).writeAsStringSync('{not json');
+      final r = HostRegistry(path);
+      expect(await r.load(), isEmpty);
+      expect(r.lastLoadRecovered, isNotNull);
+      expect(File(r.lastLoadRecovered!).readAsStringSync(), '{not json');
+      expect(File(path).existsSync(), isFalse);
+    });
+
+    test('load skips hosts that fail validation', () async {
+      final path = '${tmp.path}/hosts.json';
+      File(path).writeAsStringSync(
+        jsonEncode({
+          'hosts': [
+            ssh(target: '-oProxyCommand=evil').toJson(),
+            local().toJson(),
+          ],
+        }),
+      );
+      expect((await HostRegistry(path).load()).map((h) => h.id), ['local']);
+    });
+
+    test(
+      'loadHostsSeeding adds this machine only when no file exists',
+      () async {
+        final path = '${tmp.path}/cfg/hosts.json';
+        String? which(String exe) => exe == 'llm-host' ? '/x/llm-host' : null;
+        final r = HostRegistry(path);
+        expect((await loadHostsSeeding(r, which)).map((h) => h.id), ['local']);
+        expect(File(path).existsSync(), isTrue);
+        // The user removed every host: an empty list stays empty.
+        await r.save([]);
+        expect(await loadHostsSeeding(r, which), isEmpty);
+      },
+    );
+
+    test('a corrupt file keeps its backup and gets this machine', () async {
+      final path = '${tmp.path}/hosts.json';
+      File(path).writeAsStringSync('garbage');
+      final r = HostRegistry(path);
+      final hosts = await loadHostsSeeding(
+        r,
+        (exe) => exe == 'llm-host' ? '/x/llm-host' : null,
+      );
+      expect(hosts.map((h) => h.id), ['local']);
+      expect(File(r.lastLoadRecovered!).readAsStringSync(), 'garbage');
+    });
+  });
 }

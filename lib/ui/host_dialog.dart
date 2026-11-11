@@ -122,6 +122,16 @@ class _HostDialogState extends State<_HostDialog> {
                 selected: {_kind},
                 onSelectionChanged: (v) => setState(() {
                   _kind = v.first;
+                  // install-host.sh puts llm-host in ~/.local/bin, which a
+                  // non-interactive ssh shell often lacks on PATH; the
+                  // remote shell expands ~.
+                  final c = _cmd.text.trim();
+                  if (_kind == HostKind.ssh && c == 'llm-host') {
+                    _cmd.text = '~/.local/bin/llm-host';
+                  } else if (_kind == HostKind.local &&
+                      c == '~/.local/bin/llm-host') {
+                    _cmd.text = 'llm-host';
+                  }
                   _testResult = null;
                 }),
               ),
@@ -171,7 +181,7 @@ class _HostDialogState extends State<_HostDialog> {
                 children: [
                   OutlinedButton(
                     key: const ValueKey('host-test'),
-                    onPressed: _testing ? null : _test,
+                    onPressed: _testing || problems.isNotEmpty ? null : _test,
                     child: const Text('Test'),
                   ),
                   const SizedBox(width: 12),

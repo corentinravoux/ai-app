@@ -89,21 +89,34 @@ class HostRegistry {
   final String path;
 
   /// Hosts in file order; unreadable entries (or a corrupt file) are skipped.
+  /// Where the last [load] moved an unreadable file, or null.
+  String? lastLoadRecovered;
+
+  /// Hosts in file order. Entries that cannot be read or fail
+  /// [validateHost] are skipped. An unreadable file is moved aside to
+  /// `hosts.json.corrupt-<time>` (never overwritten) and [] is returned.
   Future<List<ModelHost>> load() async {
+    lastLoadRecovered = null;
     final f = File(path);
-    if (!await f.exists()) return [];
+    if (!f.existsSync()) return [];
     Object? v;
     try {
-      v = jsonDecode(await f.readAsString());
+      v = jsonDecode(f.readAsStringSync());
     } on FormatException {
-      return [];
+      v = null;
     }
     final list = v is Map ? v['hosts'] : null;
-    if (list is! List) return [];
+    if (list is! List) {
+      final aside = '$path.corrupt-${DateTime.now().millisecondsSinceEpoch}';
+      f.renameSync(aside);
+      lastLoadRecovered = aside;
+      return [];
+    }
     final out = <ModelHost>[];
     for (final e in list) {
       try {
-        out.add(ModelHost.fromJson(Map<String, dynamic>.from(e as Map)));
+        final h = ModelHost.fromJson(Map<String, dynamic>.from(e as Map));
+        if (validateHost(h, out).isEmpty) out.add(h);
       } on Object {
         // Skip what we cannot read; keep the others.
       }
@@ -190,6 +203,21 @@ String hostIdFromLabel(String label) {
       .replaceAll(RegExp(r'^-+|-+$'), '');
   if (s.isEmpty) return 'host';
   return s.length > 32 ? s.substring(0, 32).replaceAll(RegExp(r'-+$'), '') : s;
+}
+
+/// The saved hosts; on a first start (no file yet, or an unreadable one
+/// moved aside) "This machine" when llm-host is installed here. A user who
+/// removed every host keeps an empty list.
+Future<List<ModelHost>> loadHostsSeeding(
+  HostRegistry registry,
+  Which which,
+) async {
+  final hosts = await registry.load();
+  if (File(registry.path).existsSync()) return hosts;
+  final here = defaultLocalHost(which);
+  final seeded = [?here];
+  await registry.save(seeded);
+  return seeded;
 }
 
 /// "This machine", when llm-host is installed here. Keeps the path found,

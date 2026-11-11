@@ -67,14 +67,10 @@ Future<void> main() async {
   final registry = HostRegistry(
     '${configHome(Platform.environment, os)}/ai-app/hosts.json',
   );
-  var hosts = await registry.load();
-  if (hosts.isEmpty) {
-    final here = defaultLocalHost((exe) => whichOnPath(exe, env));
-    if (here != null) {
-      hosts = [here];
-      await registry.save(hosts);
-    }
-  }
+  final hosts = await loadHostsSeeding(
+    registry,
+    (exe) => whichOnPath(exe, env),
+  );
   final sshExe = whichOnPath('ssh', env);
   final controlDir = '$dataRoot/ssh';
   await Directory(controlDir).create(recursive: true);

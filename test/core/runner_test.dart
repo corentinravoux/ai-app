@@ -32,4 +32,17 @@ void main() {
     final r = await const IoRunner().run('/nonexistent/x', []);
     expect(r.exitCode, 127);
   });
+
+  test('malformed output does not throw', () async {
+    final r = await const IoRunner().run('sh', ['-c', r"printf '\377ok'"]);
+    expect(r.exitCode, 0);
+    expect(r.stdout, contains('ok'));
+  });
+
+  test('a background grandchild does not hold a finished command', () async {
+    final sw = Stopwatch()..start();
+    final r = await const IoRunner().run('sh', ['-c', 'sleep 3 & echo hi']);
+    expect(r.stdout.trim(), 'hi');
+    expect(sw.elapsed, lessThan(const Duration(milliseconds: 1500)));
+  });
 }
