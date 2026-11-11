@@ -87,7 +87,7 @@ void main() {
     expect((s.gpuUsedMib, s.gpuTotalMib), (10035, 12288));
     expect(s.error, isNull);
     expect(r.calls.single.args, ['status', '--json']);
-    expect(r.calls.single.timeout, const Duration(seconds: 25));
+    expect(r.calls.single.timeout, const Duration(seconds: 12));
   });
 
   test('gpu null leaves both gpu fields null', () async {
