@@ -269,6 +269,12 @@ void main() {
     // and the button shows it (once the form has no problems)
     await openAdd(tester);
     await enter(tester, 'host-label', 'Mini');
+    // "This machine" already serves on 9931: a second local host needs its own
+    expect(
+      find.text('Port 9931 is already used by another host on this machine.'),
+      findsOneWidget,
+    );
+    await enter(tester, 'host-server-port', '9932');
     await tester.tap(find.byKey(const ValueKey('host-test')));
     await tester.pumpAndSettle();
     expect(find.text('ready: Q · 64K'), findsOneWidget);
