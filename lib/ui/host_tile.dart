@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app/app_state.dart';
 import '../core/host_client.dart';
 import '../core/hosts.dart';
+import '../core/tunnel.dart';
 import 'log_dialog.dart';
 import 'theme.dart';
 
@@ -57,6 +58,12 @@ class HostTile extends StatelessWidget {
       }
     }
 
+    final tunnel = state.tunnelOf(id);
+    final tunnelLine =
+        host.isRemote && tunnel.phase != TunnelPhase.up && tunnel.error != null
+        ? 'Tunnel: ${tunnel.error}'
+        : null;
+
     final usable = s != null && s.state != ServerState.foreign;
     final running =
         s?.state == ServerState.ready || s?.state == ServerState.loading;
@@ -93,6 +100,10 @@ class HostTile extends StatelessWidget {
                 if (line3 != null) ...[
                   const SizedBox(height: 1),
                   Text(line3, style: small?.copyWith(color: Tok.faint)),
+                ],
+                if (tunnelLine != null) ...[
+                  const SizedBox(height: 1),
+                  Text(tunnelLine, style: small?.copyWith(color: Tok.danger)),
                 ],
               ],
             ),
