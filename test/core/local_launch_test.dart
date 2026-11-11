@@ -162,9 +162,47 @@ void main() {
         expect(s.env['CLAUDE_CONFIG_DIR'], '$home/data/local/pc/claude');
         expect(s.env.containsKey('CLAUDE_CODE_OAUTH_TOKEN'), isFalse);
         expect(s.env.containsKey('ALCF_SESSION_ID'), isFalse);
-        expect(s.args.take(3), ['--bare', '--tools', 'Bash,Read,Edit']);
+        expect(s.args.take(5), [
+          '--bare',
+          '--setting-sources',
+          'user',
+          '--tools',
+          'Bash,Read,Edit',
+        ]);
       },
     );
+
+    test(
+      'opencode env disables project config, updates and model fetches',
+      () async {
+        final oc = await launch(AgentKind.opencode);
+        expect(oc.env['OPENCODE_DISABLE_PROJECT_CONFIG'], '1');
+        expect(oc.env['OPENCODE_DISABLE_AUTOUPDATE'], '1');
+        expect(oc.env['OPENCODE_DISABLE_MODELS_FETCH'], '1');
+        final pi = await launch(AgentKind.pi);
+        expect(pi.env.containsKey('OPENCODE_DISABLE_PROJECT_CONFIG'), isFalse);
+      },
+    );
+
+    test('local tabs drop cloud-provider switches', () async {
+      parent.addAll({
+        'CLAUDE_CODE_USE_BEDROCK': '1',
+        'CLAUDE_CODE_USE_VERTEX': '1',
+        'CLAUDE_CODE_USE_FOUNDRY': '1',
+        'AWS_BEARER_TOKEN_BEDROCK': 'secret',
+      });
+      addTearDown(
+        () => parent.removeWhere(
+          (k, _) => k.startsWith('CLAUDE_CODE_USE_') || k.startsWith('AWS_'),
+        ),
+      );
+      for (final k in [AgentKind.claude, AgentKind.pi, AgentKind.opencode]) {
+        final s = await launch(k);
+        for (final key in kLocalStrippedEnvKeys) {
+          expect(s.env.containsKey(key), isFalse, reason: '$k $key');
+        }
+      }
+    });
 
     test('pi and opencode specs carry only their own override', () async {
       final pi = await launch(AgentKind.pi);

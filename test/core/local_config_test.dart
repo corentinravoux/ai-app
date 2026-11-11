@@ -131,13 +131,22 @@ void main() {
     expect(e['CLAUDE_CODE_MAX_OUTPUT_TOKENS'], '8192');
     expect(e['CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC'], '1');
     expect(e['NO_PROXY'], '127.0.0.1,localhost');
-    expect(claudeLocalArgs().take(3), ['--bare', '--tools', 'Bash,Read,Edit']);
+    expect(claudeLocalArgs().take(5), [
+      '--bare',
+      '--setting-sources',
+      'user',
+      '--tools',
+      'Bash,Read,Edit',
+    ]);
   });
 
   test('overrideEnv per agent', () {
     expect(overrideEnv(AgentKind.pi, '/d'), {'PI_CODING_AGENT_DIR': '/d'});
     expect(overrideEnv(AgentKind.opencode, '/d'), {
       'OPENCODE_CONFIG': '/d/opencode.jsonc',
+      'OPENCODE_DISABLE_PROJECT_CONFIG': '1',
+      'OPENCODE_DISABLE_AUTOUPDATE': '1',
+      'OPENCODE_DISABLE_MODELS_FETCH': '1',
     });
     expect(overrideEnv(AgentKind.claude, '/d'), {'CLAUDE_CONFIG_DIR': '/d'});
   });
@@ -247,9 +256,13 @@ void main() {
     expect(ext, contains('pi.exec("webread", [params.url]'));
   });
 
-  test('claude args: bare, three tools, and how to read the web', () {
+  test('claude args: bare, user settings only, three tools, web', () {
+    // --setting-sources user: a project's .claude/settings.json env would
+    // otherwise override ANTHROPIC_BASE_URL even under --bare (measured).
     expect(claudeLocalArgs(), [
       '--bare',
+      '--setting-sources',
+      'user',
       '--tools',
       'Bash,Read,Edit',
       '--append-system-prompt',

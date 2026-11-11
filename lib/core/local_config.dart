@@ -135,8 +135,15 @@ Map<String, String> claudeLocalEnv(LocalTarget t, String dir) => {
 /// No hooks, plugins, skills or CLAUDE.md, and three tools: the local
 /// window is too small for the full scaffolding. Web pages go through
 /// `webread` (tools/webread), first on the tab's PATH.
+///
+/// `--setting-sources user` keeps a project's `.claude/settings.json` from
+/// overriding the endpoint: its `env` block applies even under `--bare`
+/// (measured with Claude Code 2.1.322). "user" is this tab's own empty
+/// config folder.
 List<String> claudeLocalArgs() => const [
   '--bare',
+  '--setting-sources',
+  'user',
   '--tools',
   'Bash,Read,Edit',
   '--append-system-prompt',
@@ -145,7 +152,14 @@ List<String> claudeLocalArgs() => const [
 
 Map<String, String> overrideEnv(AgentKind k, String dir) => switch (k) {
   AgentKind.pi => {'PI_CODING_AGENT_DIR': dir},
-  AgentKind.opencode => {'OPENCODE_CONFIG': '$dir/opencode.jsonc'},
+  // A project's opencode.json would otherwise be merged over this config
+  // (its provider wins); no update checks or models.dev fetches offline.
+  AgentKind.opencode => {
+    'OPENCODE_CONFIG': '$dir/opencode.jsonc',
+    'OPENCODE_DISABLE_PROJECT_CONFIG': '1',
+    'OPENCODE_DISABLE_AUTOUPDATE': '1',
+    'OPENCODE_DISABLE_MODELS_FETCH': '1',
+  },
   AgentKind.claude => {'CLAUDE_CONFIG_DIR': dir},
   AgentKind.codex => throw ArgumentError('codex is not offered on model hosts'),
 };
