@@ -49,6 +49,18 @@ class ProbeTests(unittest.TestCase):
         self.assertIn("text", c["tool_call"]["detail"])
         self.assertTrue(c["anthropic"]["ok"])
 
+    def test_probe_allows_long_thinking(self):
+        self.cli("start", "r", env={"FAKE_THINK_TOKENS": "600"})
+        code, out = self.cli("probe")
+        self.assertEqual(code, 0, out)
+        self.assertTrue(self.checks(out)["tool_call"]["ok"])
+
+    def test_probe_accepts_object_arguments(self):
+        self.cli("start", "r", env={"FAKE_ARGS_AS_OBJECT": "1"})
+        code, out = self.cli("probe")
+        self.assertEqual(code, 0, out)
+        self.assertIn('"city": "Paris"', self.checks(out)["tool_call"]["detail"])
+
     def test_probe_on_a_stopped_server_exits_1(self):
         code, out = self.cli("probe")
         self.assertEqual(code, 1)

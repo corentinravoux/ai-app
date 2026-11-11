@@ -56,8 +56,16 @@ FORBIDDEN_ARGS = (
     "--hf-repo",
     "-hff",
     "--hf-file",
-    "-hfr",
+    "-hfr",  # alias of --hf-repo
+    "-hfd",  # draft model repo
+    "-hfrd",
+    "--spec-draft-hf",
     "--hf-repo-draft",
+    "-hft",  # a token has no place in a recipe file
+    "--hf-token",
+    "-mmu",  # projector download
+    "--mmproj-url",
+    "--api-prefix",  # moves /health: llm-host would see a foreign server
     "-mu",
     "--model-url",
     "-dr",
@@ -711,7 +719,8 @@ def run_probe(cfg: Config, alias: str) -> list[dict]:
 
     def tool_call():
         code, r = _post(cfg.port, "/v1/chat/completions", {
-            "model": alias, "max_tokens": 256, "temperature": 0,
+            # Room for a thinking model to reason before it calls the tool.
+            "model": alias, "max_tokens": 2048, "temperature": 0,
             "tools": [PROBE_TOOL],
             "messages": [{"role": "user", "content": "What is the weather in Paris? Use the tool."}],
         })
@@ -725,9 +734,10 @@ def run_probe(cfg: Config, alias: str) -> list[dict]:
             return False, ("the tool call came back as text: chat template or parser problem"
                            if leak else "no tool call in the answer")
         fn = calls[0].get("function", {})
+        raw = fn.get("arguments")
         try:
-            args = json.loads(fn.get("arguments") or "{}")
-        except ValueError:
+            args = raw if isinstance(raw, dict) else json.loads(raw or "{}")
+        except (ValueError, TypeError):
             return False, f"invalid JSON arguments: {fn.get('arguments')!r}"
         if any(m in text for m in LEAK_MARKERS):
             return False, "tool markup also leaked into the text"
