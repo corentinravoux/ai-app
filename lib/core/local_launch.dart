@@ -18,6 +18,17 @@ List<Profile> localProfiles(List<ModelHost> hosts) => [
       ),
 ];
 
+/// Removed from local tabs on top of [kStrippedEnvKeys] and every
+/// `ANTHROPIC_*`: switches that send Claude Code to a cloud provider.
+/// Native tabs keep them (a user may run their account through Bedrock).
+const kLocalStrippedEnvKeys = [
+  'CLAUDE_CODE_USE_BEDROCK',
+  'CLAUDE_CODE_USE_VERTEX',
+  'CLAUDE_CODE_USE_FOUNDRY',
+  'AWS_BEARER_TOKEN_BEDROCK',
+  'ANTHROPIC_VERTEX_PROJECT_ID',
+];
+
 String _short(AgentKind k) => switch (k) {
   AgentKind.pi => 'Pi',
   AgentKind.opencode => 'OpenCode',
@@ -107,7 +118,9 @@ Future<LaunchSpec> buildLocalLaunch(
   await writeLocalConfig(p.kind, target, dir, guardedRoots: guardedRoots);
   final env = {
     for (final e in parentEnv.entries)
-      if (!kStrippedEnvKeys.contains(e.key) && !e.key.startsWith('ANTHROPIC_'))
+      if (!kStrippedEnvKeys.contains(e.key) &&
+          !kLocalStrippedEnvKeys.contains(e.key) &&
+          !e.key.startsWith('ANTHROPIC_'))
         e.key: e.value,
     ...overrideEnv(p.kind, dir),
     if (p.kind == AgentKind.claude) ...claudeLocalEnv(target, dir),
