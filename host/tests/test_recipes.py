@@ -101,16 +101,52 @@ class RecipeTests(unittest.TestCase):
         p = self.h.model("org/m/mmproj.gguf")
         r = self._one("r", good_recipe(model=m, mmproj=p))
         self.assertTrue(r.vision)
+        # Recipe args first, fixed flags last: llama.cpp keeps the last value.
         self.assertEqual(
             lh.build_command(self.cfg, r),
-            ["/x/llama-server", "-m", f"{self.h.models}/{m}", "--mmproj", f"{self.h.models}/{p}",
-             "--alias", "r", "-c", "32768", "--host", "127.0.0.1", "--port", "9931",
-             "-ngl", "99", "-np", "1"],
+            ["/x/llama-server", "-ngl", "99", "-np", "1",
+             "-m", f"{self.h.models}/{m}", "--mmproj", f"{self.h.models}/{p}",
+             "--alias", "r", "-c", "32768", "--host", "127.0.0.1", "--port", "9931"],
         )
         r2 = self._one("r2", good_recipe(model=m))
         cmd = lh.build_command(self.cfg, r2)
         self.assertNotIn("--mmproj", cmd)
         self.assertFalse(r2.vision)
+
+    def test_more_download_flags_are_forbidden(self):
+        self.h.model()
+        for flag in ("-hfr", "--hf-repo-draft", "-mu", "--model-url", "-dr", "--docker-repo"):
+            self.assertIn(flag, lh.FORBIDDEN_ARGS)
+            with self.assertRaises(lh.RecipeError):
+                self._one("r", good_recipe(args=[flag, "x"]))
+
+    def test_start_loop_skips_gpu_query(self):
+        import os, tempfile
+        d = tempfile.mkdtemp()
+        smi = os.path.join(d, "nvidia-smi")
+        with open(smi, "w") as f:
+            f.write("#!/bin/sh\necho 'Fake GPU, 100, 200'\n")
+        os.chmod(smi, 0o755)
+        old = os.environ.get("PATH", "")
+        os.environ["PATH"] = d + os.pathsep + old
+        try:
+            self.assertEqual(lh.gpu_info()["used_mib"], 100)
+            self.assertIsNone(lh.compute_status(self.cfg, gpu=False)["gpu"])
+        finally:
+            os.environ["PATH"] = old
+
+    def test_ps_fallback_matches_proc(self):
+        import os
+        pid = os.getpid()
+        with_proc = lh.process_argv(pid)
+        os.environ["LLM_HOST_NO_PROC"] = "1"
+        try:
+            via_ps = lh.process_argv(pid)
+            self.assertEqual(lh.process_state(pid)[:1] in ("R", "S"), True)
+        finally:
+            del os.environ["LLM_HOST_NO_PROC"]
+        self.assertEqual(via_ps[:2], with_proc[:2])
+        self.assertIsNone(lh.process_argv(999999999))
 
     def test_model_path_cannot_escape_models_dir(self):
         for bad in ("../../etc/passwd", "/etc/passwd", "a/../../x.gguf"):

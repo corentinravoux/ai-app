@@ -55,6 +55,12 @@ FORBIDDEN_ARGS = (
     "--hf-repo",
     "-hff",
     "--hf-file",
+    "-hfr",
+    "--hf-repo-draft",
+    "-mu",
+    "--model-url",
+    "-dr",
+    "--docker-repo",
     "--mmproj",
 )
 
@@ -216,12 +222,13 @@ def load_recipes(cfg: Config) -> tuple[list[Recipe], list[RecipeError]]:
 
 
 def build_command(cfg: Config, r: Recipe) -> list[str]:
-    cmd = [cfg.server_bin, "-m", f"{cfg.models_dir}/{r.model}"]
+    # Recipe args first: llama.cpp keeps the last value of a repeated flag,
+    # so the model, alias, window, host and port set here always win.
+    cmd = [cfg.server_bin, *r.args, "-m", f"{cfg.models_dir}/{r.model}"]
     if r.mmproj:
         cmd += ["--mmproj", f"{cfg.models_dir}/{r.mmproj}"]
     cmd += ["--alias", r.name, "-c", str(r.ctx)]
-    cmd += ["--host", "127.0.0.1", "--port", str(cfg.port)]
-    return cmd + list(r.args)
+    return cmd + ["--host", "127.0.0.1", "--port", str(cfg.port)]
 
 
 # ------------------------------------------------------------- lifecycle
@@ -266,18 +273,59 @@ class State:
         return "\n".join(lines[-n:])
 
 
+def _use_proc() -> bool:
+    return os.path.isdir("/proc/self") and not os.environ.get("LLM_HOST_NO_PROC")
+
+
+def process_argv(pid: int) -> list[str] | None:
+    """argv of a live process: /proc on Linux, `ps` elsewhere (macOS). With
+    `ps` the arguments are split on whitespace (paths with spaces blur)."""
+    import subprocess
+
+    if _use_proc():
+        try:
+            raw = pathlib.Path(f"/proc/{pid}/cmdline").read_bytes()
+        except OSError:
+            return None
+        return [a.decode(errors="replace") for a in raw.split(b"\0") if a]
+    try:
+        r = subprocess.run(["ps", "-ww", "-o", "command=", "-p", str(pid)],
+                           capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    line = r.stdout.strip()
+    return line.split() if r.returncode == 0 and line else None
+
+
+def process_state(pid: int) -> str | None:
+    """One-letter state (R, S, Z…) of a live process, None if gone."""
+    import subprocess
+
+    if _use_proc():
+        try:
+            stat = pathlib.Path(f"/proc/{pid}/stat").read_text()
+            return stat.rsplit(") ", 1)[1].split()[0]
+        except (OSError, IndexError):
+            return None
+    try:
+        r = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)],
+                           capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    s = r.stdout.strip()
+    return s[:1] if r.returncode == 0 and s else None
+
+
 def is_ours(cfg: Config, pid: int | None) -> bool:
     """A live process whose command line runs server_bin: directly, as the
     script of an interpreter, or through `/usr/bin/env interpreter script`
     (a shebang, while env has not yet exec'd). Zombies and reused pids do
     not count."""
-    if not pid:
+    if not pid or process_state(pid) in (None, "Z"):
         return False
-    try:
-        raw = pathlib.Path(f"/proc/{pid}/cmdline").read_bytes()
-    except OSError:
+    argv = process_argv(pid)
+    if not argv:
         return False
-    argv = [a.decode(errors="replace") for a in raw.split(b"\0") if a]
     real = os.path.realpath(cfg.server_bin)
     return any(os.path.realpath(a) == real for a in argv[:3])
 
@@ -326,7 +374,7 @@ def gpu_info() -> dict | None:
         return None
 
 
-def compute_status(cfg: Config) -> dict:
+def compute_status(cfg: Config, gpu: bool = True) -> dict:
     import socket
 
     st = State(cfg)
@@ -347,7 +395,7 @@ def compute_status(cfg: Config) -> dict:
         "port": cfg.port,
         "pid": None,
         "started": None,
-        "gpu": gpu_info(),
+        "gpu": gpu_info() if gpu else None,
         "error": None,
     }
     recipe_fields = {
@@ -363,7 +411,9 @@ def compute_status(cfg: Config) -> dict:
         out.update(recipe_fields, pid=pid)
         if health and health[0] == 200:
             out["state"] = "ready"
-            out["ctx"] = _props_ctx(cfg.port) or out["ctx"]
+            # Only the server knows its per-slot window; the recipe's -c is
+            # too big with -np 2, so no fallback to it.
+            out["ctx"] = _props_ctx(cfg.port)
         else:
             out["state"] = "loading"
         return out
@@ -397,17 +447,9 @@ def _terminate(pid: int) -> None:
                 if done:
                     return
             except ChildProcessError:
-                if not pathlib.Path(f"/proc/{pid}").exists() or _zombie(pid):
+                if process_state(pid) in (None, "Z"):
                     return
             time.sleep(0.1)
-
-
-def _zombie(pid: int) -> bool:
-    try:
-        stat = pathlib.Path(f"/proc/{pid}/stat").read_text()
-        return stat.rsplit(") ", 1)[1].split()[0] == "Z"
-    except (OSError, IndexError):
-        return True
 
 
 import contextlib
@@ -534,7 +576,7 @@ def cmd_start(cfg: Config, a: argparse.Namespace) -> int:
                 info["error"] = st.tail(20) or f"llama-server exited with code {p.returncode}"
                 st.write_info(info)
             return finish(EXIT_FAILED)
-        s = compute_status(cfg)
+        s = compute_status(cfg, gpu=False)
         if s["state"] == "ready" or a.wait <= 0:
             _print(s, a.json, _status_text(s))
             return EXIT_OK
