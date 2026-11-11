@@ -107,41 +107,49 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    _showNotice(context);
     return ListenableBuilder(
       listenable: state,
-      builder: (context, _) => Scaffold(
-        body: Row(
-          children: [
-            Sidebar(
-              state: state,
-              onOpen: (s) => _open(context, s),
-              onConfigure: (s) =>
-                  widget.onConfigure?.call(context, state, s.profile),
-              onAddHost: state.registry == null
-                  ? null
-                  : () => showHostDialog(context, state),
-              onEditHost: state.registry == null
-                  ? null
-                  : (h) => showHostDialog(context, state, editing: h),
-            ),
-            Expanded(
-              child: Column(
-                children: [
-                  _Banner(state: state),
-                  if (state.tabs.isEmpty)
-                    Expanded(child: _EmptyState(state: state))
-                  else ...[
-                    _TabStrip(state: state, onDragging: _setDragging),
-                    Expanded(child: _panesView()),
-                  ],
-                ],
+      // The notice is read on every state change, not only on a full build.
+      builder: (context, _) => _withNotice(
+        context,
+        Scaffold(
+          body: Row(
+            children: [
+              Sidebar(
+                state: state,
+                onOpen: (s) => _open(context, s),
+                onConfigure: (s) =>
+                    widget.onConfigure?.call(context, state, s.profile),
+                onAddHost: state.registry == null
+                    ? null
+                    : () => showHostDialog(context, state),
+                onEditHost: state.registry == null
+                    ? null
+                    : (h) => showHostDialog(context, state, editing: h),
               ),
-            ),
-          ],
+              Expanded(
+                child: Column(
+                  children: [
+                    _Banner(state: state),
+                    if (state.tabs.isEmpty)
+                      Expanded(child: _EmptyState(state: state))
+                    else ...[
+                      _TabStrip(state: state, onDragging: _setDragging),
+                      Expanded(child: _panesView()),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  Widget _withNotice(BuildContext context, Widget child) {
+    _showNotice(context);
+    return child;
   }
 
   static const _divider = 7.0;
