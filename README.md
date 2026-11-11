@@ -20,7 +20,7 @@ tab says where its requests go.
 
 | | Linux | macOS | Windows |
 |---|---|---|---|
-| App | tested (Ubuntu 24.04–26.04) | built by CI, not yet tried | built by CI, not yet tried |
+| App | tested (Ubuntu 24.04–26.04) | built by CI, not yet tried | built by CI; **agent tabs do not work yet** (below) |
 | ALCF | yes | yes | no |
 | Model hosts over SSH | yes | yes | yes (no shared SSH connection) |
 | Serving a model (`llm-host`) | yes (NVIDIA tested) | yes (Apple Silicon expected) | no |
@@ -88,7 +88,14 @@ powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1
 ```
 
 Start **AI App** from the Start menu. ALCF is not available on Windows.
-Model hosts work over OpenSSH (built into Windows 10 and 11).
+
+**Known problem: agent tabs do not start correctly yet.** The terminal
+library (flutter_pty 0.4.2) builds the Windows command line without
+quoting, repeats the program's path as its first argument, and converts
+text byte by byte. Claude and Pi therefore get their own path as a first
+prompt, and Claude's `--append-system-prompt` text is cut up by cmd.exe.
+A patched copy of the library is the next step
+([docs/next-steps-plan.md](docs/next-steps-plan.md) § C).
 
 ### ALCF tools (Linux, macOS)
 
