@@ -238,6 +238,25 @@ void main() {
     expect(readJson('$dir/settings.json')['defaultProvider'], 'local');
   });
 
+  test('pi config contains the web_read extension', () async {
+    final dir = '$home/data/local/pc/pi';
+    await writeLocalConfig(AgentKind.pi, t32, dir, guardedRoots: guarded);
+    final ext = File('$dir/extensions/web_read.ts').readAsStringSync();
+    expect(ext, contains('pi.registerTool'));
+    expect(ext, contains('name: "web_read"'));
+    expect(ext, contains('pi.exec("webread", [params.url]'));
+  });
+
+  test('claude args: bare, three tools, and how to read the web', () {
+    expect(claudeLocalArgs(), [
+      '--bare',
+      '--tools',
+      'Bash,Read,Edit',
+      '--append-system-prompt',
+      'To read a web page, run: webread <url>',
+    ]);
+  });
+
   test('two hosts get two directories', () {
     expect(localDir('/d', 'local', AgentKind.pi), '/d/local/local/pi');
     expect(localDir('/d', 'pc', AgentKind.pi), '/d/local/pc/pi');
