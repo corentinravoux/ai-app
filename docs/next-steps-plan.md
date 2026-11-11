@@ -50,6 +50,22 @@ CI only compiles them. On a Mac, `scripts/install-macos.sh`; on Windows,
   step.
 - **ALCF** works on macOS. It is disabled on Windows on purpose.
 
+**Windows agent tabs need a patched flutter_pty first** (found by the
+round 2 review in `flutter_pty_win.c`). Its `build_command`:
+
+- writes the executable and then every argv entry, including argv[0], so
+  the program's path is passed twice;
+- joins arguments with spaces and no quoting (cmd.exe then re-parses
+  `.cmd` shims, and `<url>` becomes a redirection);
+- casts UTF-8 bytes to WCHAR one by one, which breaks non-ASCII paths and
+  environment values.
+
+The plan: vendor flutter_pty under `third_party/`, drop argv[0] from the
+command line, quote with MSVCRT rules, run `.cmd`/`.bat` through
+`cmd.exe /d /s /c "…"` with cmd escaping, convert with
+`MultiByteToWideChar(CP_UTF8)`. This needs a Windows machine to test
+(CI only compiles it); say when one is available.
+
 ## D. Decisions and features waiting for you
 
 1. **Full Claude on local hosts.** Your `CLAUDE.md`, commands and skills,

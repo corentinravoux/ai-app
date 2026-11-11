@@ -278,43 +278,68 @@ def _use_proc() -> bool:
     return os.path.isdir("/proc/self") and not os.environ.get("LLM_HOST_NO_PROC")
 
 
-def process_argv(pid: int) -> list[str] | None:
-    """argv of a live process: /proc on Linux, `ps` elsewhere (macOS). With
-    `ps` the arguments are split on whitespace (paths with spaces blur)."""
+UNKNOWN = "?"  # process_state() when `ps` failed but the pid is alive
+
+
+def _alive(pid: int) -> bool | None:
+    """True alive (ours to signal), False gone, None alive but not ours."""
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return None
+
+
+def _ps(pid: int, field: str) -> str | None:
+    """`ps -o <field>= -p pid` output, or None when ps itself failed."""
     import subprocess
 
+    try:
+        r = subprocess.run(["ps", "-ww", "-o", f"{field}=", "-p", str(pid)],
+                           capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    out = r.stdout.strip()
+    return out if r.returncode == 0 and out else None
+
+
+def process_command(pid: int) -> str | None:
+    """Full command line of a live process (spaces included), or None."""
+    if _use_proc():
+        argv = process_argv(pid)
+        return " ".join(argv) if argv else None
+    return _ps(pid, "command")
+
+
+def process_argv(pid: int) -> list[str] | None:
+    """argv of a live process: /proc on Linux, `ps` elsewhere (macOS). With
+    `ps` the arguments are split on whitespace: use [process_command] to
+    match paths that contain spaces."""
     if _use_proc():
         try:
             raw = pathlib.Path(f"/proc/{pid}/cmdline").read_bytes()
         except OSError:
             return None
         return [a.decode(errors="replace") for a in raw.split(b"\0") if a]
-    try:
-        r = subprocess.run(["ps", "-ww", "-o", "command=", "-p", str(pid)],
-                           capture_output=True, text=True, timeout=10)
-    except (OSError, subprocess.SubprocessError):
-        return None
-    line = r.stdout.strip()
-    return line.split() if r.returncode == 0 and line else None
+    cmd = _ps(pid, "command")
+    return cmd.split() if cmd else None
 
 
 def process_state(pid: int) -> str | None:
-    """One-letter state (R, S, Z…) of a live process, None if gone."""
-    import subprocess
-
+    """One-letter state (R, S, Z…), None if gone, [UNKNOWN] if `ps` failed
+    while the process is alive (a transient failure must not orphan it)."""
     if _use_proc():
         try:
             stat = pathlib.Path(f"/proc/{pid}/stat").read_text()
             return stat.rsplit(") ", 1)[1].split()[0]
         except (OSError, IndexError):
             return None
-    try:
-        r = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)],
-                           capture_output=True, text=True, timeout=10)
-    except (OSError, subprocess.SubprocessError):
-        return None
-    s = r.stdout.strip()
-    return s[:1] if r.returncode == 0 and s else None
+    s = _ps(pid, "stat")
+    if s:
+        return s[:1]
+    return UNKNOWN if _alive(pid) else None
 
 
 def is_ours(cfg: Config, pid: int | None) -> bool:
@@ -322,13 +347,25 @@ def is_ours(cfg: Config, pid: int | None) -> bool:
     script of an interpreter, or through `/usr/bin/env interpreter script`
     (a shebang, while env has not yet exec'd). Zombies and reused pids do
     not count."""
-    if not pid or process_state(pid) in (None, "Z"):
+    if not pid:
         return False
-    argv = process_argv(pid)
-    if not argv:
+    state = process_state(pid)
+    if state in (None, "Z"):
         return False
+    if state == UNKNOWN:
+        return True  # alive, ps failed: keep trusting our own pidfile
     real = os.path.realpath(cfg.server_bin)
-    return any(os.path.realpath(a) == real for a in argv[:3])
+    cmd = process_command(pid)
+    if cmd is None:
+        return bool(_alive(pid)) and not _use_proc()
+    # The binary itself, or its script after an interpreter / `env interp`
+    # (fakes in tests); prefix match so a path with spaces still counts.
+    rest = cmd
+    for _ in range(3):
+        if rest.startswith((real, cfg.server_bin)):
+            return True
+        rest = rest.split(" ", 1)[1] if " " in rest else ""
+    return False
 
 
 def _http(port: int, path: str, timeout: float = 2.0) -> tuple[int, bytes] | None:

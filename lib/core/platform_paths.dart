@@ -72,3 +72,27 @@ String? whichOn(String exe, Map<String, String> env, HostOs os) {
   }
   return null;
 }
+
+/// Folder for ssh ControlMaster sockets. Short on purpose: a Unix socket
+/// path is limited to 104 bytes on macOS (108 on Linux), and ssh adds 40
+/// characters (%C) plus a 17-character temporary suffix. The app's data
+/// folder under "Application Support" is too long for that.
+String sshControlDir(Map<String, String> env, HostOs os) =>
+    '${homeDir(env, os)}/.ssh/ai-app';
+
+/// On Windows the variable is usually spelt `Path`, and a copied map is
+/// case-sensitive: keep a single `PATH` key so a child does not get two.
+Map<String, String> normalizePathKey(Map<String, String> env, HostOs os) {
+  if (os != HostOs.windows) return env;
+  final out = <String, String>{};
+  String? path;
+  for (final e in env.entries) {
+    if (e.key.toUpperCase() == 'PATH') {
+      path ??= e.value;
+    } else {
+      out[e.key] = e.value;
+    }
+  }
+  if (path != null) out['PATH'] = path;
+  return out;
+}

@@ -29,9 +29,20 @@ command -v python3 >/dev/null || { echo "python3 is required (>= 3.11)" >&2; exi
 python3 -c 'import sys; sys.exit(sys.version_info < (3, 11))' \
     || { echo "python3 >= 3.11 is required (tomllib)" >&2; exit 1; }
 
+# Pin the interpreter checked above: an ssh session or a Finder launch on
+# macOS finds Apple's python3 (3.9, no tomllib) first on its short PATH.
+# The system Python when it is recent enough (outlives any virtualenv),
+# else the python3 checked above (Homebrew's on macOS).
+if /usr/bin/python3 -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null; then
+    py=/usr/bin/python3
+else
+    py="$(python3 -c 'import sys; print(sys.executable)')"
+fi
 mkdir -p "$bin_dir"
-install -m 755 "$here/host/llm_host.py" "$bin_dir/llm-host"
-echo "installed $bin_dir/llm-host"
+{ echo "#!$py"; tail -n +2 "$here/host/llm_host.py"; } > "$bin_dir/llm-host.new"
+chmod 755 "$bin_dir/llm-host.new"
+mv "$bin_dir/llm-host.new" "$bin_dir/llm-host"
+echo "installed $bin_dir/llm-host (python: $py)"
 
 if [[ ! -f "$cfg_dir/config.toml" ]]; then
     if [[ -z "$server_bin" || -z "$models_dir" ]]; then
