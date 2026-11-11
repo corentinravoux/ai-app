@@ -7,7 +7,7 @@ one; it is also usable by hand. Standard library only.
 
     llm-host list   [--json]          recipes in ~/.config/llm-host/recipes
     llm-host status [--json]          what runs on the port
-    llm-host start <recipe> [--replace] [--wait S] [--json]
+    llm-host start <recipe> [--replace] [--wait S=600] [--json]
     llm-host stop   [--json]
     llm-host log    [-n LINES]
 
@@ -562,7 +562,7 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("start", help="start a recipe")
     s.add_argument("recipe")
     s.add_argument("--replace", action="store_true", help="stop the running server first")
-    s.add_argument("--wait", type=float, default=300.0, help="seconds to wait for ready (0: return at once)")
+    s.add_argument("--wait", type=float, default=600.0, help="seconds to wait for ready (0: return at once; default 600)")
     s.add_argument("--json", action="store_true")
     s.set_defaults(func=cmd_start)
     s = sub.add_parser("stop", help="stop the server llm-host started")
