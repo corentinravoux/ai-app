@@ -6,6 +6,18 @@ const kPiWebReadExtension = r'''
 // Written by AI App: a web_read tool for local models. Edits are overwritten.
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { existsSync } from "node:fs";
+import { delimiter, join } from "node:path";
+
+/** Windows: the webread Python script on PATH (next to webread.cmd). */
+function findScript(): string | undefined {
+  const path = process.env.PATH ?? process.env.Path ?? "";
+  for (const dir of path.split(delimiter)) {
+    const f = join(dir, "webread");
+    if (dir && existsSync(f)) return f;
+  }
+  return undefined;
+}
 
 export default function (pi: ExtensionAPI) {
   pi.registerTool({
@@ -17,10 +29,22 @@ export default function (pi: ExtensionAPI) {
       url: Type.String({ description: "The page URL, starting with http:// or https://" }),
     }),
     async execute(toolCallId, params, signal, onUpdate, ctx) {
-      // Windows: webread is webread.cmd, which needs cmd.exe to run.
-      const r = process.platform === "win32"
-        ? await pi.exec("cmd", ["/c", "webread", params.url], { signal, timeout: 30000 })
-        : await pi.exec("webread", [params.url], { signal, timeout: 30000 });
+      const opts = { signal, timeout: 30000 };
+      let r;
+      if (process.platform === "win32") {
+        // Not through cmd.exe, which would cut the URL at "&": run the
+        // script with Python directly, the URL as its own argument.
+        const script = findScript();
+        if (!script) {
+          return { content: [{ type: "text", text: "webread is not on PATH" }], details: {} };
+        }
+        r = await pi.exec("py", ["-3", script, params.url], opts);
+        if (r.code !== 0 && /not found|ENOENT|not recognized/i.test(r.stderr ?? "")) {
+          r = await pi.exec("python", [script, params.url], opts);
+        }
+      } else {
+        r = await pi.exec("webread", [params.url], opts);
+      }
       const text = r.code === 0 ? r.stdout : (r.stderr || `webread exited with code ${r.code}`);
       return { content: [{ type: "text", text }], details: {} };
     },

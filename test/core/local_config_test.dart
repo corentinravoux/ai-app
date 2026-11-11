@@ -254,6 +254,20 @@ void main() {
     expect(ext, contains('pi.registerTool'));
     expect(ext, contains('name: "web_read"'));
     expect(ext, contains('pi.exec("webread", [params.url]'));
+    // Windows: no cmd.exe (it would split a URL at &); the script is found
+    // on PATH and run by py -3 (else python), the URL as its own argument.
+    expect(ext, isNot(contains('"cmd"')));
+    expect(ext, contains('["-3", script, params.url]'));
+    expect(ext, contains('[script, params.url]'));
+  });
+
+  test('webread.cmd runs webread once, whatever its exit code', () {
+    final cmd = File('tools/webread.cmd').readAsStringSync();
+    // `a && b || c` would run c again when webread itself fails.
+    expect(cmd, isNot(contains('||')));
+    expect(cmd, contains('where py'));
+    expect(cmd, contains('exit /b'));
+    expect(cmd, contains('\r\n'), reason: 'CRLF line ends for cmd.exe');
   });
 
   test('claude args: bare, user settings only, three tools, web', () {
