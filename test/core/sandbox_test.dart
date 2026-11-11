@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:alcfai_app/core/agents.dart';
-import 'package:alcfai_app/core/sandbox.dart';
+import 'package:ai_app/core/agents.dart';
+import 'package:ai_app/core/sandbox.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -10,7 +10,7 @@ void main() {
   late Sandbox sb;
 
   setUp(() {
-    tmp = Directory.systemTemp.createTempSync('alcfai_sb_');
+    tmp = Directory.systemTemp.createTempSync('aiapp_sb_');
     realHome = '${tmp.path}/home';
     Directory('$realHome/.globus').createSync(recursive: true);
     Directory('$realHome/.claude/plugins').createSync(recursive: true);

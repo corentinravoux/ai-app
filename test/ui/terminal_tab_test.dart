@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:alcfai_app/core/launch.dart';
-import 'package:alcfai_app/core/pty.dart';
-import 'package:alcfai_app/ui/terminal_tab.dart';
+import 'package:ai_app/core/launch.dart';
+import 'package:ai_app/core/pty.dart';
+import 'package:ai_app/ui/terminal_tab.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

@@ -1,11 +1,11 @@
 import 'dart:io';
 
-import 'package:alcfai_app/core/app_store.dart';
+import 'package:ai_app/core/app_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   late Directory tmp;
-  setUp(() => tmp = Directory.systemTemp.createTempSync('alcfai_store_'));
+  setUp(() => tmp = Directory.systemTemp.createTempSync('aiapp_store_'));
   tearDown(() => tmp.deleteSync(recursive: true));
 
   test(
@@ -52,7 +52,7 @@ void main() {
   });
 
   test('accounts round-trip; ~/ expands; absent stays null', () async {
-    final tmp = Directory.systemTemp.createTempSync('alcfai_store_acc_');
+    final tmp = Directory.systemTemp.createTempSync('aiapp_store_acc_');
     addTearDown(() => tmp.deleteSync(recursive: true));
     final f = File('${tmp.path}/state.json')
       ..writeAsStringSync(

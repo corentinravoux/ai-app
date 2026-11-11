@@ -1,4 +1,4 @@
-# ALCF AI
+# AI App
 
 A Linux desktop app that runs AI coding agents (Claude Code, Codex, OpenCode,
 Pi) on the [ALCF Inference Endpoints](https://docs.alcf.anl.gov/services/inference-endpoints/),
@@ -41,8 +41,8 @@ No AI assistant is needed to install or use it: follow the steps below.
 2. Build and install the app:
 
    ```bash
-   git clone https://github.com/corentinravoux/alcfai-app
-   cd alcfai-app
+   git clone https://github.com/corentinravoux/ai-app
+   cd ai-app
    ./scripts/install-linux.sh
    ```
 
@@ -60,7 +60,7 @@ No AI assistant is needed to install or use it: follow the steps below.
    The script installs the same small AppArmor profile Ubuntu ships for
    VS Code: it only lets the app use user namespaces.
 
-4. Start **ALCF AI** from your applications menu.
+4. Start **AI App** from your applications menu.
 
 To update later: `git pull` then `./scripts/install-linux.sh` again. Your
 settings are kept.
@@ -173,11 +173,11 @@ closed:
 
 | path | what |
 |---|---|
-| `~/.local/opt/alcfai-app/` | the installed app |
-| `~/.local/share/applications/dev.ravoux.alcfai_app.desktop` | menu entry (plus icons under `~/.local/share/icons/hicolor/`) |
+| `~/.local/opt/ai-app/` | the installed app |
+| `~/.local/share/applications/dev.ravoux.ai_app.desktop` | menu entry (plus icons under `~/.local/share/icons/hicolor/`) |
 | `~/.local/share/alcfai/home/` | the agents' ALCF settings (the app's own "home"; `.globus` links to your ALCF login) |
 | `~/.local/share/alcfai/state.json` | app state, no secrets |
-| `/etc/apparmor.d/alcfai-app` | only if you ran `install-apparmor.sh` |
+| `/etc/apparmor.d/ai-app` | only if you ran `install-apparmor.sh` |
 
 To uninstall, delete those. To start the ALCF setup over, delete
 `~/.local/share/alcfai/home` and configure again.
