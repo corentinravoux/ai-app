@@ -265,6 +265,47 @@ void main() {
     ]);
   });
 
+  testWidgets('the menu shows recipes added since the last refresh', (
+    tester,
+  ) async {
+    current = status('stopped');
+    final state = await pump(tester, makeState(hosts: const [local]));
+    // A recipe file was added on the host after the first list.
+    runner.handlers['llm-host list'] = (_) => RunResult(
+      0,
+      jsonEncode({
+        ...recipes,
+        'recipes': [
+          ...(recipes['recipes']! as List),
+          {
+            'name': 'new-128k',
+            'label': 'New · 128K',
+            'model': 'n.gguf',
+            'ctx': 131072,
+            'max_output': 4096,
+            'vision': false,
+            'notes': '',
+            'model_present': true,
+          },
+        ],
+      }),
+      '',
+    );
+    await tester.tap(find.byKey(const ValueKey('host-menu-local')));
+    await tester.pumpAndSettle();
+    expect(find.text('New · 128K'), findsOneWidget);
+    expect(find.text('Qwen3.6 35B-A3B · 32K'), findsOneWidget);
+    await tester.tap(find.text('New · 128K'));
+    await tester.pump();
+    await tester.runAsync(() => state.saving);
+    await tester.pumpAndSettle();
+    expect(runner.calls.where((c) => c.args.first == 'start').single.args, [
+      'start',
+      'new-128k',
+      '--json',
+    ]);
+  });
+
   testWidgets('recipe with a missing model file is disabled', (tester) async {
     current = status('stopped');
     await pump(tester, makeState(hosts: const [local]));
