@@ -194,6 +194,37 @@ void main() {
       expect((await HostRegistry(path).load()).map((h) => h.id), ['local']);
     });
 
+    test('load backs up a file whose entries were dropped', () async {
+      final path = '${tmp.path}/hosts.json';
+      final text = jsonEncode({
+        'hosts': [ssh(target: '').toJson(), local().toJson()],
+      });
+      File(path).writeAsStringSync(text);
+      final r = HostRegistry(path);
+      expect((await r.load()).map((h) => h.id), ['local']);
+      expect(r.lastLoadDropped, 1);
+      expect(r.lastLoadRecovered, contains('hosts.json.dropped-'));
+      expect(File(r.lastLoadRecovered!).readAsStringSync(), text);
+      expect(File(path).readAsStringSync(), text, reason: 'the file stays');
+      final n = recoveredNotice(r)!;
+      expect(n, contains('1 host'));
+      expect(n, contains(r.lastLoadRecovered!));
+    });
+
+    test('a clean file makes no backup', () async {
+      final path = '${tmp.path}/hosts.json';
+      File(path).writeAsStringSync(
+        jsonEncode({
+          'hosts': [local().toJson()],
+        }),
+      );
+      final r = HostRegistry(path);
+      await r.load();
+      expect((r.lastLoadRecovered, r.lastLoadDropped), (null, 0));
+      expect(recoveredNotice(r), isNull);
+      expect(Directory(tmp.path).listSync(), hasLength(1));
+    });
+
     test(
       'loadHostsSeeding adds this machine only when no file exists',
       () async {

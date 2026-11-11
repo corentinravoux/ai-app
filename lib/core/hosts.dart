@@ -91,11 +91,15 @@ class HostRegistry {
   /// Where the last [load] moved an unreadable file, or null.
   String? lastLoadRecovered;
 
+  /// How many entries the last [load] dropped (unreadable or invalid).
+  int lastLoadDropped = 0;
+
   /// Hosts in file order. Entries that cannot be read or fail
   /// [validateHost] are skipped. An unreadable file is moved aside to
   /// `hosts.json.corrupt-<time>` (never overwritten) and [] is returned.
   Future<List<ModelHost>> load() async {
     lastLoadRecovered = null;
+    lastLoadDropped = 0;
     final f = File(path);
     if (!f.existsSync()) return [];
     Object? v;
@@ -117,10 +121,20 @@ class HostRegistry {
     for (final e in list) {
       try {
         final h = ModelHost.fromJson(Map<String, dynamic>.from(e as Map));
-        if (validateHost(h, out).isEmpty) out.add(h);
+        if (validateHost(h, out).isEmpty) {
+          out.add(h);
+          continue;
+        }
       } on Object {
-        // Skip what we cannot read; keep the others.
+        // counted below
       }
+      lastLoadDropped++;
+    }
+    // The next save would erase what was dropped: keep the file as it was.
+    if (lastLoadDropped > 0) {
+      final copy = '$path.dropped-${DateTime.now().millisecondsSinceEpoch}';
+      f.copySync(copy);
+      lastLoadRecovered = copy;
     }
     return out;
   }
@@ -208,10 +222,17 @@ String hostIdFromLabel(String label) {
 
 /// The sentence to show after [HostRegistry.load] moved a file aside, or
 /// null.
-String? recoveredNotice(HostRegistry r) => r.lastLoadRecovered == null
-    ? null
-    : 'hosts.json could not be read; your hosts list starts over. '
-          'The old file is kept as ${r.lastLoadRecovered}.';
+String? recoveredNotice(HostRegistry r) {
+  final copy = r.lastLoadRecovered;
+  if (copy == null) return null;
+  final n = r.lastLoadDropped;
+  if (n > 0) {
+    return '$n ${n == 1 ? 'host' : 'hosts'} in hosts.json could not be '
+        'read and were left out. The file as it was is kept as $copy.';
+  }
+  return 'hosts.json could not be read; your hosts list starts over. '
+      'The old file is kept as $copy.';
+}
 
 /// The saved hosts; on a first start (no file yet, or an unreadable one
 /// moved aside) "This machine" when llm-host is installed here. A user who
