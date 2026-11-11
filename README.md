@@ -1,9 +1,13 @@
 # AI App
 
 A Linux desktop app that runs AI coding agents (Claude Code, Codex, OpenCode,
-Pi) on the [ALCF Inference Endpoints](https://docs.alcf.anl.gov/services/inference-endpoints/),
-in terminal tabs, side by side, and lets you switch between them. It can also
-open your usual Claude Code accounts in the same window.
+Pi) in terminal tabs, side by side, and lets you switch between them. The
+agents can run on:
+
+- the [ALCF Inference Endpoints](https://docs.alcf.anl.gov/services/inference-endpoints/);
+- **your own model hosts**: a PC with a GPU running llama.cpp, used from that
+  PC or from your laptop anywhere (see [Your own model hosts](#your-own-model-hosts));
+- your usual Claude Code accounts, opened as they are.
 
 The app sets each agent up for ALCF with `alcf-ai agent configure`, but in a
 folder of its own (`~/.local/share/alcfai/home`). Your normal agent settings
@@ -78,6 +82,9 @@ The left sidebar lists the agents.
      folder and checks that your real settings files did not change.
   4. Click **Open**, choose the folder to work in, and the agent starts in a
      new tab.
+- **Model hosts**: Pi, OpenCode and Claude against a llama-server on a
+  machine of yours. Each host shows what model runs there; start, switch or
+  stop it from its row, then click **Open** on an agent below it.
 - **Your Claude accounts**: Claude Code with your usual login, launched as is.
   The app finds `~/.claude` and every `~/.claude-<name>` folder that holds a
   login. To rename or choose them, see [Settings](#settings).
@@ -87,8 +94,8 @@ model inkling-bf16"). If the ALCF login has expired, a banner offers
 **Log in**; the app re-checks it every 3 hours.
 
 Agents marked "Not installed" were not found. The app looks on your `PATH`
-and in `~/.local/bin`, `~/.opencode/bin`, `~/.pi/agent/bin`, `~/.bun/bin`,
-`~/.npm-global/bin` and `~/.cargo/bin`.
+and in `~/.local/bin`, `~/opt/node/bin`, `~/.opencode/bin`, `~/.pi/agent/bin`,
+`~/.bun/bin`, `~/.npm-global/bin` and `~/.cargo/bin`.
 
 ## In a session
 
@@ -137,6 +144,47 @@ line). Drag a divider to resize; double-click it to even the two sides. The
 - **OpenCode** and **Pi**: all clusters. They start on the model chosen in
   Configure; pick another inside the agent if you like.
 
+## Your own model hosts
+
+A model host is a machine with a GPU that serves one model at a time with
+llama.cpp's `llama-server`. A small script, `llm-host`, runs there and
+starts the model from a tested *recipe* (model file, context size, GPU
+offload). The agents always run on the machine where the app runs, in your
+project folder; only the model is on the host.
+
+- **On the host itself**: install llm-host and write its recipes
+  ([docs/hosts.md](docs/hosts.md)). The app then shows **This machine** under
+  *Model hosts*.
+- **From a laptop**: the laptop reaches the host over SSH (through Tailscale,
+  so it works at home, at work and travelling). Click **Add host**, choose
+  *Over SSH*, enter the host's SSH name, then **Test**. The app keeps an SSH
+  tunnel open to the host's server: nothing is exposed to the network.
+
+What each agent gets:
+
+| agent | set up by the app | web pages |
+|---|---|---|
+| Pi | `models.json` and `settings.json` with the server's real window and output cap | a `web_read` tool |
+| OpenCode | `opencode.jsonc` with the window, output cap, compaction and tool-output limits | its own WebFetch |
+| Claude | environment only (`ANTHROPIC_BASE_URL` to the host), `--bare`, three tools | `webread <url>` through Bash |
+
+The configs live in `~/.local/share/ai-app/local/<host>/<agent>/` and are
+rewritten from the host's live status every time a tab opens, so they always
+declare the window the server really has. Claude needs at least a 32K
+window, OpenCode 24K and Pi 16K; an agent below its minimum stays greyed with
+the reason.
+
+Switching or stopping the model while tabs use it asks first: those tabs
+keep running but lose (or change) their model. **Restart** a tab to give it
+the new model's settings.
+
+Working "offline" means working at the host itself: two machines need the
+internet to find each other unless they share a network.
+
+**Web pages and a shell.** Pi asks no permission before running commands. A
+page can contain instructions aimed at the model, so use a scratch copy of
+your project for web-heavy Pi sessions.
+
 ## Share your Claude instructions (optional)
 
 Claude on ALCF starts without your `CLAUDE.md`, commands and skills (the
@@ -177,6 +225,9 @@ closed:
 | `~/.local/share/applications/dev.ravoux.ai_app.desktop` | menu entry (plus icons under `~/.local/share/icons/hicolor/`) |
 | `~/.local/share/alcfai/home/` | the agents' ALCF settings (the app's own "home"; `.globus` links to your ALCF login) |
 | `~/.local/share/alcfai/state.json` | app state, no secrets |
+| `~/.config/ai-app/hosts.json` | your model hosts |
+| `~/.local/share/ai-app/` | local agents' configs (`local/`), ssh control sockets (`ssh/`), `bin/webread` |
+| `~/.local/bin/llm-host`, `~/.config/llm-host/` | on a model host only: the script and its recipes |
 | `/etc/apparmor.d/ai-app` | only if you ran `install-apparmor.sh` |
 
 To uninstall, delete those. To start the ALCF setup over, delete
