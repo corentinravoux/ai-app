@@ -187,8 +187,13 @@ Future<void> writeLocalConfig(
         // missing or corrupt: start over
       }
       await _writeJson('$dir/settings.json', {...old, ...piSettings(t)});
-      await Directory('$dir/extensions').create();
-      await _writeText('$dir/extensions/web_read.ts', kPiWebReadExtension);
+      // A symlinked extensions/ would carry the write into its target: the
+      // guard on [dir] does not cover what a child resolves to.
+      final ext = '$dir/extensions';
+      _refuseGuarded(ext, guardedRoots);
+      await Directory(ext).create();
+      _refuseGuarded(ext, guardedRoots);
+      await _writeText('$ext/web_read.ts', kPiWebReadExtension);
     case AgentKind.opencode:
       await _writeJson('$dir/opencode.jsonc', opencodeConfig(t));
     case AgentKind.claude:
