@@ -58,6 +58,9 @@ LaunchSpec buildLaunch(
       if (!kStrippedEnvKeys.contains(e.key) && !e.key.startsWith('ANTHROPIC_'))
         e.key: e.value,
   };
+  if (p.isLocal) {
+    throw ArgumentError('local profiles launch through buildLocalLaunch');
+  }
   if (p.isAlcf) {
     env['ALCF_SESSION_ID'] = sessionId;
     final key = switch (p.kind) {
@@ -78,6 +81,7 @@ LaunchSpec buildLaunch(
 /// (they are added in ~/.bashrc, which a menu launch never reads).
 const kAgentBinDirs = [
   '.local/bin',
+  'opt/node/bin',
   '.opencode/bin',
   '.pi/agent/bin',
   '.bun/bin',

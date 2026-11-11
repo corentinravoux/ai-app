@@ -15,6 +15,7 @@ void main() {
       '$h/.claude-alt/settings.json',
       '$h/.codex/config.toml',
       '$h/.pi/agent/models.json',
+      '$h/.pi/agent/settings.json',
       '$h/.config/opencode/opencode.jsonc',
     ]);
   });
