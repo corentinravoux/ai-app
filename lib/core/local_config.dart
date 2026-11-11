@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import 'agents.dart';
+import 'pi_extension.dart';
 
 /// What an agent needs to know about the model it talks to. Built from the
 /// host's live status, so the declared window is the server's real one.
@@ -132,8 +133,15 @@ Map<String, String> claudeLocalEnv(LocalTarget t, String dir) => {
 };
 
 /// No hooks, plugins, skills or CLAUDE.md, and three tools: the local
-/// window is too small for the full scaffolding.
-List<String> claudeLocalArgs() => const ['--bare', '--tools', 'Bash,Read,Edit'];
+/// window is too small for the full scaffolding. Web pages go through
+/// `webread` (tools/webread), first on the tab's PATH.
+List<String> claudeLocalArgs() => const [
+  '--bare',
+  '--tools',
+  'Bash,Read,Edit',
+  '--append-system-prompt',
+  'To read a web page, run: webread <url>',
+];
 
 Map<String, String> overrideEnv(AgentKind k, String dir) => switch (k) {
   AgentKind.pi => {'PI_CODING_AGENT_DIR': dir},
@@ -165,6 +173,8 @@ Future<void> writeLocalConfig(
         // missing or corrupt: start over
       }
       await _writeJson('$dir/settings.json', {...old, ...piSettings(t)});
+      await Directory('$dir/extensions').create();
+      await _writeText('$dir/extensions/web_read.ts', kPiWebReadExtension);
     case AgentKind.opencode:
       await _writeJson('$dir/opencode.jsonc', opencodeConfig(t));
     case AgentKind.claude:
@@ -211,10 +221,13 @@ String _resolveExisting(String path) {
   }
 }
 
+Future<void> _writeJson(String path, Map<String, dynamic> v) =>
+    _writeText(path, const JsonEncoder.withIndent('  ').convert(v));
+
 /// Temp file + rename; a symlink at [path] is replaced, never followed.
-Future<void> _writeJson(String path, Map<String, dynamic> v) async {
+Future<void> _writeText(String path, String text) async {
   if (await FileSystemEntity.isLink(path)) await Link(path).delete();
   final tmp = File('$path.tmp');
-  await tmp.writeAsString(const JsonEncoder.withIndent('  ').convert(v));
+  await tmp.writeAsString(text);
   await tmp.rename(path);
 }
