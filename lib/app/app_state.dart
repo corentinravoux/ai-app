@@ -473,6 +473,24 @@ class AppState extends ChangeNotifier {
     return out;
   }
 
+  /// The probe's checks as text lines (`PASS  tool_call  …`).
+  Future<String> probeText(String hostId) async {
+    final h = hostById(hostId);
+    final client = hostClient;
+    if (h == null || client == null) return '';
+    return switch (await client.probe(h)) {
+      HostOk(:final value) =>
+        value
+            .map(
+              (c) =>
+                  '${c.ok ? 'PASS' : 'FAIL'}  ${c.name.padRight(10)} ${c.detail}',
+            )
+            .join('\n'),
+      HostUnreachable(:final message) => message,
+      HostFailed(:final message) => message,
+    };
+  }
+
   Future<String> logTail(String hostId) async {
     final h = hostById(hostId);
     final client = hostClient;

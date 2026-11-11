@@ -10,6 +10,7 @@ one; it is also usable by hand. Standard library only.
     llm-host start <recipe> [--replace] [--wait S=600] [--json]
     llm-host stop   [--json]
     llm-host log    [-n LINES]
+    llm-host probe  [--json]          check the running model: tool call, Anthropic API, speed
 
 A recipe is one tested launch of one model (TOML):
 
@@ -594,6 +595,111 @@ def cmd_start(cfg: Config, a: argparse.Namespace) -> int:
         time.sleep(0.25)
 
 
+LEAK_MARKERS = ("<tool_call>", "<function=", "</tool_call>", "<|tool_call", "<|channel|>")
+
+PROBE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_weather",
+        "description": "Get the current weather for a city.",
+        "parameters": {
+            "type": "object",
+            "properties": {"city": {"type": "string", "description": "City name"}},
+            "required": ["city"],
+        },
+    },
+}
+
+
+def _post(port: int, path: str, body: dict, timeout: float = 120.0) -> tuple[int, dict]:
+    import http.client
+
+    c = http.client.HTTPConnection("127.0.0.1", port, timeout=timeout)
+    c.request("POST", path, json.dumps(body), {"Content-Type": "application/json",
+                                                "x-api-key": "local"})
+    r = c.getresponse()
+    raw = r.read()
+    c.close()
+    try:
+        return r.status, json.loads(raw or b"{}")
+    except ValueError:
+        return r.status, {}
+
+
+def run_probe(cfg: Config, alias: str) -> list[dict]:
+    """Checks a ready server the way agents use it. Each check is
+    {name, ok, detail}; network errors become failed checks."""
+    checks = []
+
+    def check(name, fn):
+        try:
+            ok, detail = fn()
+        except Exception as e:  # one line per check, never a traceback
+            ok, detail = False, f"{type(e).__name__}: {e}"
+        checks.append({"name": name, "ok": bool(ok), "detail": detail})
+
+    def tool_call():
+        code, r = _post(cfg.port, "/v1/chat/completions", {
+            "model": alias, "max_tokens": 256, "temperature": 0,
+            "tools": [PROBE_TOOL],
+            "messages": [{"role": "user", "content": "What is the weather in Paris? Use the tool."}],
+        })
+        if code != 200:
+            return False, f"HTTP {code}"
+        msg = (r.get("choices") or [{}])[0].get("message", {})
+        text = msg.get("content") or ""
+        calls = msg.get("tool_calls") or []
+        if not calls:
+            leak = any(m in text for m in LEAK_MARKERS)
+            return False, ("the tool call came back as text: chat template or parser problem"
+                           if leak else "no tool call in the answer")
+        fn = calls[0].get("function", {})
+        try:
+            args = json.loads(fn.get("arguments") or "{}")
+        except ValueError:
+            return False, f"invalid JSON arguments: {fn.get('arguments')!r}"
+        if any(m in text for m in LEAK_MARKERS):
+            return False, "tool markup also leaked into the text"
+        return True, f"{fn.get('name')}({json.dumps(args)})"
+
+    def anthropic():
+        code, r = _post(cfg.port, "/v1/messages", {
+            "model": alias, "max_tokens": 16,
+            "messages": [{"role": "user", "content": "Say ok."}],
+        })
+        ok = code == 200 and isinstance(r.get("content"), list)
+        return ok, "/v1/messages answers (Claude Code)" if ok else f"/v1/messages: HTTP {code}"
+
+    def generation():
+        code, r = _post(cfg.port, "/v1/chat/completions", {
+            "model": alias, "max_tokens": 64, "temperature": 0,
+            "messages": [{"role": "user", "content": "Count from 1 to 30, separated by spaces."}],
+        })
+        if code != 200:
+            return False, f"HTTP {code}"
+        tps = (r.get("timings") or {}).get("predicted_per_second")
+        return True, f"{tps:.1f} tok/s" if isinstance(tps, (int, float)) else "speed not reported"
+
+    check("tool_call", tool_call)
+    check("anthropic", anthropic)
+    check("generation", generation)
+    return checks
+
+
+def cmd_probe(cfg: Config, a: argparse.Namespace) -> int:
+    s = compute_status(cfg, gpu=False)
+    if s["state"] != "ready":
+        msg = ("No model is running: start one first" if s["state"] == "stopped"
+               else f"The server is {s['state']}: probe needs a ready model")
+        _print({"schema": SCHEMA, "ok": False, "checks": [], "error": msg}, a.json, msg)
+        return 1
+    checks = run_probe(cfg, s["alias"] or s["recipe"] or "local")
+    ok = all(c["ok"] for c in checks)
+    text = "\n".join(f"{'PASS' if c['ok'] else 'FAIL'}  {c['name']:<10} {c['detail']}" for c in checks)
+    _print({"schema": SCHEMA, "ok": ok, "checks": checks, "error": None}, a.json, text)
+    return EXIT_OK if ok else EXIT_FAILED
+
+
 def cmd_log(cfg: Config, a: argparse.Namespace) -> int:
     text = State(cfg).tail(max(a.n, 1))
     if text:
@@ -643,6 +749,9 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("stop", help="stop the server llm-host started")
     s.add_argument("--json", action="store_true")
     s.set_defaults(func=cmd_stop)
+    s = sub.add_parser("probe", help="check the running model: tool call, Anthropic API, speed")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(func=cmd_probe)
     s = sub.add_parser("log", help="tail of the server log")
     s.add_argument("-n", type=int, default=80)
     s.set_defaults(func=cmd_log)

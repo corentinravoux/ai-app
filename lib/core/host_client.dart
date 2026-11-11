@@ -89,6 +89,14 @@ class Recipe {
   );
 }
 
+/// One line of `llm-host probe`.
+class ProbeCheck {
+  const ProbeCheck(this.name, this.ok, this.detail);
+  final String name;
+  final bool ok;
+  final String detail;
+}
+
 sealed class HostResult<T> {
   const HostResult();
 }
@@ -213,6 +221,26 @@ class HostClient {
 
   Future<HostResult<HostStatus>> stop(ModelHost h) =>
       _statusCall(h, ['stop', '--json'], _short);
+
+  /// `llm-host probe`: tool call, Anthropic endpoint and speed of the
+  /// running model. A server that is not ready is a [HostFailed].
+  Future<HostResult<List<ProbeCheck>>> probe(ModelHost h) async {
+    final r = await _run(h, ['probe', '--json'], const Duration(seconds: 180));
+    if (r is! HostOk<RunResult>) return _same(r);
+    final j = _decode(r.value.stdout);
+    if (j == null) return HostFailed(_unknownFormat(h));
+    if (r.value.exitCode == 1 || j['checks'] is! List) {
+      return HostFailed((j['error'] as String?) ?? 'the probe could not run');
+    }
+    return HostOk([
+      for (final c in j['checks'] as List)
+        ProbeCheck(
+          '${(c as Map)['name']}',
+          c['ok'] == true,
+          '${c['detail'] ?? ''}',
+        ),
+    ]);
+  }
 
   Future<HostResult<String>> logTail(ModelHost h, {int lines = 80}) async {
     final r = await _run(h, ['log', '-n', '$lines'], _short);

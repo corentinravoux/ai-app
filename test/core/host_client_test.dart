@@ -269,4 +269,46 @@ void main() {
     expect(kSshOptions, containsAllInOrder(['-o', 'ServerAliveInterval=5']));
     expect(kSshOptions, containsAllInOrder(['-o', 'ServerAliveCountMax=3']));
   });
+
+  test('probe parses checks and maps a stopped server', () async {
+    final r = FakeRunner({
+      'llm-host probe': (_) => RunResult(
+        3,
+        jsonEncode({
+          'schema': 1,
+          'ok': false,
+          'checks': [
+            {'name': 'tool_call', 'ok': false, 'detail': 'came back as text'},
+            {'name': 'generation', 'ok': true, 'detail': '38.0 tok/s'},
+          ],
+          'error': null,
+        }),
+        '',
+      ),
+    });
+    final res = await client(r).probe(local) as HostOk<List<ProbeCheck>>;
+    expect(res.value.map((c) => (c.name, c.ok)), [
+      ('tool_call', false),
+      ('generation', true),
+    ]);
+    expect(r.calls.single.args, ['probe', '--json']);
+    expect(r.calls.single.timeout, const Duration(seconds: 180));
+
+    final stopped = FakeRunner({
+      'llm-host probe': (_) => RunResult(
+        1,
+        jsonEncode({
+          'schema': 1,
+          'ok': false,
+          'checks': [],
+          'error': 'No model is running: start one first',
+        }),
+        '',
+      ),
+    });
+    expect(
+      ((await client(stopped).probe(local)) as HostFailed).message,
+      'No model is running: start one first',
+    );
+  });
 }

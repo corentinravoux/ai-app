@@ -69,50 +69,49 @@ class HostTile extends StatelessWidget {
         s?.state == ServerState.ready || s?.state == ServerState.loading;
     final canStop = usable && (running || s.state == ServerState.error);
 
+    Widget smallButton(
+      String key,
+      String tip,
+      IconData icon,
+      VoidCallback? on,
+    ) => IconButton(
+      key: ValueKey(key),
+      tooltip: tip,
+      visualDensity: VisualDensity.compact,
+      iconSize: 16,
+      onPressed: on,
+      icon: Icon(icon),
+    );
+
+    // Two lines of controls: the 260 px sidebar has room for two buttons
+    // beside the name; the others go below the status lines.
     return Padding(
       key: ValueKey('host-$id'),
-      padding: const EdgeInsets.fromLTRB(8, 6, 2, 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 6, right: 8),
-            child: Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
-            ),
-          ),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.fromLTRB(8, 6, 2, 2),
+      child: IconTheme(
+        data: const IconThemeData(color: Tok.muted, size: 18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Text(
-                  host.label,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                    color: Tok.text,
+                Container(
+                  width: 8,
+                  height: 8,
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+                ),
+                Expanded(
+                  child: Text(
+                    host.label,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      color: Tok.text,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(line2, style: small?.copyWith(color: Tok.muted)),
-                if (line3 != null) ...[
-                  const SizedBox(height: 1),
-                  Text(line3, style: small?.copyWith(color: Tok.faint)),
-                ],
-                if (tunnelLine != null) ...[
-                  const SizedBox(height: 1),
-                  Text(tunnelLine, style: small?.copyWith(color: Tok.danger)),
-                ],
-              ],
-            ),
-          ),
-          IconTheme(
-            data: const IconThemeData(color: Tok.muted, size: 18),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
                 _RecipeMenu(state: state, host: host, enabled: usable),
                 IconButton(
                   key: ValueKey('host-stop-$id'),
@@ -121,31 +120,64 @@ class HostTile extends StatelessWidget {
                   onPressed: canStop ? () => _stop(context) : null,
                   icon: const Icon(Icons.stop_rounded),
                 ),
-                IconButton(
-                  key: ValueKey('host-log-$id'),
-                  tooltip: 'Server log',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: s == null
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.only(left: 16, right: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(line2, style: small?.copyWith(color: Tok.muted)),
+                  if (line3 != null) ...[
+                    const SizedBox(height: 1),
+                    Text(line3, style: small?.copyWith(color: Tok.faint)),
+                  ],
+                  if (tunnelLine != null) ...[
+                    const SizedBox(height: 1),
+                    Text(tunnelLine, style: small?.copyWith(color: Tok.danger)),
+                  ],
+                ],
+              ),
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                smallButton(
+                  'host-probe-$id',
+                  'Probe: tool call, Claude API, speed',
+                  Icons.fact_check_outlined,
+                  s?.state == ServerState.ready
+                      ? () => showTextDialog(
+                          context,
+                          title:
+                              'Probe of ${s!.label ?? s.recipe} on ${host.label}',
+                          text: state.probeText(id),
+                        )
+                      : null,
+                ),
+                smallButton(
+                  'host-log-$id',
+                  'Server log',
+                  Icons.article_outlined,
+                  s == null
                       ? null
                       : () => showTextDialog(
                           context,
                           title: 'llama-server log on ${host.label}',
                           text: state.logTail(id),
                         ),
-                  icon: const Icon(Icons.article_outlined),
                 ),
                 if (onEdit != null)
-                  IconButton(
-                    key: ValueKey('host-edit-$id'),
-                    tooltip: 'Edit host',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: onEdit,
-                    icon: const Icon(Icons.edit_outlined),
+                  smallButton(
+                    'host-edit-$id',
+                    'Edit host',
+                    Icons.edit_outlined,
+                    onEdit,
                   ),
               ],
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
