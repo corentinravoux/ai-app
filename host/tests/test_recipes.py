@@ -120,6 +120,15 @@ class RecipeTests(unittest.TestCase):
             with self.assertRaises(lh.RecipeError):
                 self._one("r", good_recipe(args=[flag, "x"]))
 
+    def test_download_and_token_flags_are_forbidden(self):
+        # Spellings from `llama-server --help` (b12190).
+        self.h.model()
+        for flag in ("-hfd", "-hfrd", "--spec-draft-hf", "-mmu", "--mmproj-url",
+                     "-hft", "--hf-token", "--api-prefix"):
+            for args in ([flag, "x"], [f"{flag}=x"]):
+                with self.assertRaises(lh.RecipeError, msg=flag):
+                    self._one("r", good_recipe(args=args))
+
     def test_start_loop_skips_gpu_query(self):
         import os, tempfile
         d = tempfile.mkdtemp()

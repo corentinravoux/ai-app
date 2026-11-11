@@ -7,6 +7,8 @@ FAKE_EXIT_AFTER    print a line, wait this many seconds, exit 1
 FAKE_NCTX          n_ctx served in /props (default: the -c value)
 FAKE_NO_PROPS      /props answers 500
 FAKE_TOOL_AS_TEXT  tool calls come back as text markup, not tool_calls
+FAKE_THINK_TOKENS  a tool call needs max_tokens >= this + 50 (thinking models)
+FAKE_ARGS_AS_OBJECT  tool-call arguments come back as an object, not a string
 """
 import http.server
 import json
@@ -61,8 +63,13 @@ class H(http.server.BaseHTTPRequestHandler):
         n = int(self.headers.get("content-length", "0"))
         body = json.loads(self.rfile.read(n) or b"{}")
         if self.path == "/v1/chat/completions":
-            if body.get("tools"):
-                call = {"name": "get_weather", "arguments": '{"city": "Paris"}'}
+            think = int(os.environ.get("FAKE_THINK_TOKENS", "0"))
+            if body.get("tools") and body.get("max_tokens", 10**6) < think + 50:
+                msg = {"role": "assistant", "content": "", "reasoning_content": "hmm " * 20}
+            elif body.get("tools"):
+                args = ({"city": "Paris"} if os.environ.get("FAKE_ARGS_AS_OBJECT")
+                        else '{"city": "Paris"}')
+                call = {"name": "get_weather", "arguments": args}
                 if os.environ.get("FAKE_TOOL_AS_TEXT"):
                     msg = {"role": "assistant",
                            "content": '<tool_call>{"name": "get_weather"}</tool_call>'}
