@@ -55,7 +55,7 @@ CI only compiles them. On a Mac, `scripts/install-macos.sh`; on Windows,
 1. **Full Claude on local hosts.** Your `CLAUDE.md`, commands and skills,
    with all of Claude Code's tools, when the window is large enough. The
    measured prompt size and the threshold are in `docs/local-wire-notes.md`
-   (improvements plan, Task 8).
+   (improvements plan, Task 8): 18,503 tokens, so it fits the 64K recipe.
    - Decide whether you want it, and whether per host or per tab.
    - It also needs an interactive check: first-run screens and the "use
      this API key?" prompt in a fresh config folder.

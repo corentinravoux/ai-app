@@ -10,7 +10,7 @@ report the output." All three fixed it and reported 5.
 |---|---|---|---|
 | Pi | 1.5.2 (`@earendil-works/pi-coding-agent`) | 13 s | ~1,520 tokens |
 | OpenCode | 1.19.5 (`opencode-ai`) | 37 s | ~12,800 tokens |
-| Claude Code | 2.1.322 (`@anthropic-ai/claude-code`), `--bare --tools Bash,Read,Edit` | 14 s | ~22,400 tokens |
+| Claude Code | 2.1.322 (`@anthropic-ai/claude-code`), `--bare --tools Bash,Read,Edit` | 14 s | ~1,240 tokens (corrected 2026-11-11, see below) |
 
 The first request after a model load is slow (Pi's 1,520-token first prefill
 took 76 s, 20 tok/s): the mmapped experts are still being read from disk.
@@ -97,3 +97,34 @@ A single-model llama-server answers whatever `model` name it is sent (checked
 on `/v1/chat/completions` and `/v1/messages`). A tab therefore keeps working
 after a switch, but its config still declares the old window and output cap:
 the switch warning stays, and reopening the tab regenerates the config.
+
+## Round 2 measurements (2026-11-11, b12190)
+
+- **Claude Code's real first-turn prompt** (fresh 128K server, `-p "reply
+  with the single word: pong"`):
+  - `--bare --setting-sources user --tools Bash,Read,Edit`: **1,240 tokens**.
+    The 22,400 above came from the run that looped on permission denials
+    (many turns), not from one turn.
+  - **Full** (no `--bare`; `CLAUDE.md`, `commands/`, `skills/` linked into
+    the config folder): **18,503 tokens**, 34 s of prefill on the first
+    turn. It fits a 64K window with room to work.
+  - Without `--bare`, `ANTHROPIC_API_KEY` alone gives "Not logged in": full
+    mode needs `"apiKeyHelper": "echo local"` in the tab's `settings.json`.
+  - The 32K minimum for Claude stays: Claude Code does not auto-compact
+    below a 100K window (`CLAUDE_CODE_AUTO_COMPACT_WINDOW` is clamped), so a
+    small window fills with no way out.
+- **Project overrides.** Under `--bare`, a project's
+  `.claude/settings.json` `env` still overrides `ANTHROPIC_BASE_URL` and
+  the model (the model became "hijacked" and the requests went to the URL
+  the project set). `--setting-sources user` stops it (checked live: the
+  answer came from the local model). OpenCode merges a project's
+  `opencode.json` over `OPENCODE_CONFIG` (its model became `evil/x`);
+  `OPENCODE_DISABLE_PROJECT_CONFIG=1` stops it (checked live).
+- **Vision**: recipe `qwen36-35b-64k-vision` (`--n-cpu-moe 22` + `mmproj-F16`)
+  loads in 149 s, uses 11.7 of 12.3 GB VRAM (0.6 GB free: close the
+  browser's GPU-heavy tabs), probe PASS, 29 tok/s, and described a test
+  image (red circle, blue square, the text "AI 42") correctly in 3.8 s.
+- **Switch race**: AI App's status polling deleted a switching server's
+  pidfile once (the new server was then killed). Fixed in llm-host (lock-checked
+  cleanup, the start restores its pidfile); live switches 9B → 64K → 128K
+  with the app open then succeeded.
