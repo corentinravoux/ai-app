@@ -457,6 +457,24 @@ void main() {
     },
   );
 
+  testWidgets('a local tab that cannot restart says why', (tester) async {
+    final state = await pump(tester, makeState(hosts: const [local]));
+    final p = state.profiles.firstWhere((p) => p.id == 'pi-local');
+    await tester.runAsync(() => state.openLocal(p, tmp.path));
+    await tester.pump();
+    current = status('stopped');
+    await tester.runAsync(() => state.restart(0));
+    await tester.pump();
+    await tester.pump();
+    expect(
+      find.descendant(
+        of: find.byType(SnackBar),
+        matching: find.text('No model is running on This machine: start one'),
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('existing ALCF and account sections are still there', (
     tester,
   ) async {
