@@ -130,7 +130,7 @@ class TunnelManager {
     '-o',
     'ConnectTimeout=8',
     '-o',
-    'ServerAliveInterval=15',
+    'ServerAliveInterval=5',
     '-o',
     'ServerAliveCountMax=3',
     '-o',

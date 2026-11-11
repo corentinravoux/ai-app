@@ -106,6 +106,8 @@ void main() {
         'ExitOnForwardFailure=yes',
         'BatchMode=yes',
         'ControlPath=none',
+        'ServerAliveInterval=5',
+        'ServerAliveCountMax=3',
       ]),
     );
   });

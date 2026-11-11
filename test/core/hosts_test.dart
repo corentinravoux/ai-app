@@ -151,5 +151,8 @@ void main() {
     )!;
     expect((h.id, h.kind, h.serverPort), ('local', HostKind.local, 9931));
     expect(h.label, 'This machine');
+    // The path found here, so a desktop launch without ~/.local/bin on its
+    // PATH still runs it.
+    expect(h.llmHostCmd, '/x/llm-host');
   });
 }

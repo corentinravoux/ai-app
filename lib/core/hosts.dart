@@ -192,12 +192,17 @@ String hostIdFromLabel(String label) {
   return s.length > 32 ? s.substring(0, 32).replaceAll(RegExp(r'-+$'), '') : s;
 }
 
-/// "This machine", when llm-host is installed here.
-ModelHost? defaultLocalHost(Which which) => which('llm-host') == null
-    ? null
-    : const ModelHost(
-        id: 'local',
-        label: 'This machine',
-        kind: HostKind.local,
-        serverPort: 9931,
-      );
+/// "This machine", when llm-host is installed here. Keeps the path found,
+/// so a desktop launch whose PATH lacks ~/.local/bin still runs it.
+ModelHost? defaultLocalHost(Which which) {
+  final path = which('llm-host');
+  return path == null
+      ? null
+      : ModelHost(
+          id: 'local',
+          label: 'This machine',
+          kind: HostKind.local,
+          serverPort: 9931,
+          llmHostCmd: path,
+        );
+}

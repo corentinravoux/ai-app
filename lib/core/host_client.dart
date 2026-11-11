@@ -118,7 +118,7 @@ const kSshOptions = [
   '-o',
   'ConnectTimeout=8',
   '-o',
-  'ServerAliveInterval=15',
+  'ServerAliveInterval=5',
   '-o',
   'ServerAliveCountMax=3',
   '-o',
@@ -144,7 +144,8 @@ class HostClient {
   /// Folder for ssh control sockets (mode 700).
   final String controlDir;
 
-  static const _short = Duration(seconds: 25);
+  /// Polls run every 5 s: a dead link must not hold one for long.
+  static const _short = Duration(seconds: 12);
 
   /// llm-host start waits up to 600 s for the server; leave it room.
   static const _start = Duration(seconds: 630);
