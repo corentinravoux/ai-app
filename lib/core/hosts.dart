@@ -111,17 +111,18 @@ class HostRegistry {
     return out;
   }
 
-  /// Writes atomically (temp file + rename), creating the folder.
+  /// Writes atomically (temp file + rename), creating the folder. The file
+  /// is a few hundred bytes: written synchronously, so a save made from a
+  /// dialog is on disk before the next frame.
   Future<void> save(List<ModelHost> hosts) async {
-    final f = File(path);
-    await f.parent.create(recursive: true);
+    File(path).parent.createSync(recursive: true);
     final tmp = File('$path.tmp');
-    await tmp.writeAsString(
+    tmp.writeAsStringSync(
       const JsonEncoder.withIndent('  ').convert({
         'hosts': [for (final h in hosts) h.toJson()],
       }),
     );
-    await tmp.rename(path);
+    tmp.renameSync(path);
   }
 }
 

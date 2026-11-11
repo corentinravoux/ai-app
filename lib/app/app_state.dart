@@ -470,6 +470,94 @@ class AppState extends ChangeNotifier {
     };
   }
 
+  /// Adds [h], or replaces the host [replacingId] by it (same id), then
+  /// saves the registry. The sidebar updates before the file is written.
+  Future<void> saveHost(ModelHost h, {String? replacingId}) async {
+    final at = replacingId == null
+        ? -1
+        : hosts.indexWhere((x) => x.id == replacingId);
+    if (at >= 0) {
+      final old = hosts[at];
+      hosts[at] = h;
+      if (old.sshTarget != h.sshTarget ||
+          old.localPort != h.localPort ||
+          old.serverPort != h.serverPort ||
+          old.kind != h.kind) {
+        await tunnels?.close(h.id);
+      }
+    } else {
+      hosts.add(h);
+    }
+    _statusesForHosts();
+    notifyListeners();
+    hostsSaving = registry?.save(hosts) ?? Future.value();
+    await hostsSaving;
+    refreshHost(h.id);
+  }
+
+  /// Completes when the last registry write has finished.
+  Future<void> hostsSaving = Future.value();
+
+  /// Removes host [id]; refused (returns the sentence) while tabs use it.
+  Future<String?> removeHost(String id) async {
+    final h = hostById(id);
+    if (h == null) return null;
+    final n = openTabsOn(id);
+    if (n > 0) {
+      return 'Close the $n ${n == 1 ? 'tab' : 'tabs'} using ${h.label} first';
+    }
+    await tunnels?.close(id);
+    hosts.removeWhere((x) => x.id == id);
+    _hostStatus.remove(id);
+    _hostProblem.remove(id);
+    _unreachable.remove(id);
+    _recipes.remove(id);
+    _statusesForHosts();
+    notifyListeners();
+    hostsSaving = registry?.save(hosts) ?? Future.value();
+    await hostsSaving;
+    return null;
+  }
+
+  /// One line for the host dialog's Test button: `ready: <model>`,
+  /// `reachable, no model running`, or why it failed.
+  Future<String> testHost(ModelHost h) async {
+    final client = hostClient;
+    if (client == null) return 'model hosts are not available';
+    if (h.isRemote && !sshAvailable) return 'ssh is not installed';
+    final saved = hostById(h.id) != null;
+    if (h.isRemote) await tunnels?.ensure(h);
+    final r = await client.status(h);
+    if (h.isRemote && !saved) await tunnels?.close(h.id);
+    return switch (r) {
+      HostOk(:final value) => switch (value.state) {
+        ServerState.ready => 'ready: ${value.label ?? value.recipe}',
+        ServerState.stopped => 'reachable, no model running',
+        ServerState.loading =>
+          'reachable, loading ${value.label ?? value.recipe}',
+        ServerState.foreign => 'reachable, but a llama-server not started by llm-host holds the port',
+        ServerState.error => 'reachable, the last start failed: see the log',
+      },
+      HostUnreachable(:final message) => message,
+      HostFailed(:final message) => message,
+    };
+  }
+
+  /// Statuses for profiles of hosts added since the last [refresh].
+  void _statusesForHosts() {
+    final known = {for (final s in statuses) s.profile.id: s};
+    statuses = [
+      for (final p in profiles)
+        // A renamed host's profiles keep their id but get the new label.
+        ProfileStatus(
+          p,
+          known[p.id]?.exePath ?? which(p.kind.exe),
+          known[p.id]?.configured ??
+              (!p.isAlcf || sandbox.isConfigured(p.kind)),
+        ),
+    ];
+  }
+
   /// Opens a local profile in a new tab. Returns null on success, else the
   /// reason it cannot open.
   Future<String?> openLocal(Profile p, String cwd, {String? title}) async {

@@ -4,6 +4,7 @@ import '../app/app_state.dart';
 import '../app/layout.dart';
 import '../core/alcf_cli.dart';
 import '../core/profiles.dart';
+import 'host_dialog.dart';
 import 'new_session_dialog.dart';
 import 'sidebar.dart';
 import 'terminal_tab.dart';
@@ -117,6 +118,12 @@ class _HomePageState extends State<HomePage> {
               onOpen: (s) => _open(context, s),
               onConfigure: (s) =>
                   widget.onConfigure?.call(context, state, s.profile),
+              onAddHost: state.registry == null
+                  ? null
+                  : () => showHostDialog(context, state),
+              onEditHost: state.registry == null
+                  ? null
+                  : (h) => showHostDialog(context, state, editing: h),
             ),
             Expanded(
               child: Column(
