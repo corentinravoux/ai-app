@@ -28,6 +28,7 @@ HostStatus st(
   ServerState s, {
   int? ctx = 65536,
   String label = 'Qwen3.6 35B-A3B · 64K',
+  int port = 9931,
 }) => HostStatus(
   state: s,
   recipe: 'qwen36-35b-64k',
@@ -35,7 +36,7 @@ HostStatus st(
   alias: 'qwen36-35b-64k',
   ctx: ctx,
   maxOutput: 8192,
-  port: 9931,
+  port: port,
 );
 
 void main() {
@@ -101,6 +102,19 @@ void main() {
       expect(
         reason(localReadiness(AgentKind.claude, local, s)),
         'Claude Code needs a 32768-token window; Small · 24K has 24576',
+      );
+    });
+
+    test('a server on another port than the saved one is blocked', () {
+      final s = st(ServerState.ready, port: 9932);
+      expect(
+        reason(localReadiness(AgentKind.pi, local, s)),
+        'The model on This machine serves on port 9932, '
+        'but the host is set to 9931: edit the host',
+      );
+      expect(
+        reason(localReadiness(AgentKind.pi, pc, s)),
+        contains('port 9932'),
       );
     });
 

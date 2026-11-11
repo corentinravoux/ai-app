@@ -84,6 +84,14 @@ LocalReadiness localReadiness(AgentKind k, ModelHost h, HostStatus? s) {
     case ServerState.ready:
       break;
   }
+  // Agents are pointed at the saved port: a server on another one (llm-host
+  // installed with --port, the host saved with the default) is not reachable.
+  if (s.port != h.serverPort) {
+    return LocalBlocked(
+      'The model on $l serves on port ${s.port}, '
+      'but the host is set to ${h.serverPort}: edit the host',
+    );
+  }
   final ctx = s.ctx;
   final alias = s.alias ?? s.recipe;
   if (ctx == null || alias == null) {
