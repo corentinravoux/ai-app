@@ -259,6 +259,10 @@ void main() {
     expect(ext, isNot(contains('"cmd"')));
     expect(ext, contains('["-3", script, params.url]'));
     expect(ext, contains('[script, params.url]'));
+    // Fall back to python only when py itself is missing, never because
+    // webread failed (a 404 would otherwise be fetched twice).
+    expect(ext, contains('/^spawn py ENOENT/'));
+    expect(ext, isNot(contains('not found|')));
   });
 
   test('webread.cmd runs webread once, whatever its exit code', () {

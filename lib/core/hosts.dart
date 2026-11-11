@@ -133,8 +133,12 @@ class HostRegistry {
     // The next save would erase what was dropped: keep the file as it was.
     if (lastLoadDropped > 0) {
       final copy = '$path.dropped-${DateTime.now().millisecondsSinceEpoch}';
-      f.copySync(copy);
-      lastLoadRecovered = copy;
+      try {
+        f.copySync(copy);
+        lastLoadRecovered = copy;
+      } on FileSystemException {
+        // No backup possible (read-only folder): still load what is valid.
+      }
     }
     return out;
   }

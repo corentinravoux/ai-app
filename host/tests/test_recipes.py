@@ -123,7 +123,7 @@ class RecipeTests(unittest.TestCase):
     def test_download_and_token_flags_are_forbidden(self):
         # Spellings from `llama-server --help` (b12190).
         self.h.model()
-        for flag in ("-hfd", "-hfrd", "--spec-draft-hf", "-mmu", "--mmproj-url",
+        for flag in ("-mm", "-hfd", "-hfrd", "--spec-draft-hf", "-mmu", "--mmproj-url",
                      "-hft", "--hf-token", "--api-prefix"):
             for args in ([flag, "x"], [f"{flag}=x"]):
                 with self.assertRaises(lh.RecipeError, msg=flag):

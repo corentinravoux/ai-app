@@ -71,6 +71,7 @@ FORBIDDEN_ARGS = (
     "-dr",
     "--docker-repo",
     "--mmproj",
+    "-mm",  # short --mmproj: llm-host passes the projector itself
 )
 
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
@@ -723,7 +724,7 @@ def run_probe(cfg: Config, alias: str) -> list[dict]:
             "model": alias, "max_tokens": 2048, "temperature": 0,
             "tools": [PROBE_TOOL],
             "messages": [{"role": "user", "content": "What is the weather in Paris? Use the tool."}],
-        })
+        }, timeout=300)  # 2048 tokens at ~10 tok/s on a CPU-offloaded host
         if code != 200:
             return False, f"HTTP {code}"
         msg = (r.get("choices") or [{}])[0].get("message", {})
