@@ -115,6 +115,19 @@ void main() {
       expect(validateHost(ssh(localPort: 9931), [local()]), isNotEmpty);
     });
 
+    test('a local host cannot take another host\'s local port', () {
+      expect(
+        validateHost(local(port: 19931), [ssh()]),
+        contains(contains('19931')),
+      );
+      expect(
+        validateHost(local(id: 'two', port: 9931), [local()]),
+        contains(contains('9931')),
+      );
+      // the remote server port of an ssh host is not a local endpoint
+      expect(validateHost(local(), [ssh(serverPort: 9931)]), isEmpty);
+    });
+
     test('local host has no ssh target', () {
       final h = ModelHost(
         id: 'local',
