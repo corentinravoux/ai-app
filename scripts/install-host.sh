@@ -41,8 +41,11 @@ if [[ ! -f "$cfg_dir/config.toml" ]]; then
     [[ -x "$server_bin" ]] || { echo "not executable: $server_bin" >&2; exit 1; }
     [[ -d "$models_dir" ]] || { echo "not a directory: $models_dir" >&2; exit 1; }
     mkdir -p "$cfg_dir/recipes"
-    printf 'server_bin = "%s"\nmodels_dir = "%s"\nport = %s\n' \
-        "$server_bin" "$models_dir" "$port" > "$cfg_dir/config.toml"
+    [[ "$port" =~ ^[0-9]+$ ]] || { echo "bad port: $port" >&2; exit 2; }
+    toml_str() { local s=${1//\\/\\\\}; printf '"%s"' "${s//\"/\\\"}"; }
+    { echo "server_bin = $(toml_str "$server_bin")"
+      echo "models_dir = $(toml_str "$models_dir")"
+      echo "port = $port"; } > "$cfg_dir/config.toml"
     echo "wrote $cfg_dir/config.toml"
 else
     echo "kept $cfg_dir/config.toml"

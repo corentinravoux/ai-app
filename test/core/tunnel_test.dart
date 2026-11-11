@@ -294,6 +294,11 @@ exec python3 -c "import socket,time; s=socket.socket(); s.setsockopt(socket.SOL_
     await r.m.dispose();
     expect(r.procs.every((p) => p.killed), isTrue);
   });
+
+  test('ssh target comes after --', () {
+    final a = Rig().m.argsFor(pc);
+    expect(a.sublist(a.length - 2), ['--', 'me@pc']);
+  });
 }
 
 extension on ModelHost {

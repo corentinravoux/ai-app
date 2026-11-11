@@ -283,4 +283,29 @@ void main() {
     });
     expect(kLocalAgents, [AgentKind.pi, AgentKind.opencode, AgentKind.claude]);
   });
+
+  test('two writes of the same file at once both succeed', () async {
+    final dir = '$home/data/local/pc/pi';
+    await Future.wait([
+      writeLocalConfig(AgentKind.pi, t32, dir, guardedRoots: guarded),
+      writeLocalConfig(AgentKind.pi, t32, dir, guardedRoots: guarded),
+      writeLocalConfig(
+        AgentKind.opencode,
+        t32,
+        '$home/data/local/pc/oc',
+        guardedRoots: guarded,
+      ),
+      writeLocalConfig(
+        AgentKind.opencode,
+        t32,
+        '$home/data/local/pc/oc',
+        guardedRoots: guarded,
+      ),
+    ]);
+    expect(readJson('$dir/models.json')['providers'], isNotNull);
+    expect(
+      Directory(dir).listSync().where((e) => e.path.endsWith('.tmp')),
+      isEmpty,
+    );
+  });
 }

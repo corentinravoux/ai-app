@@ -541,10 +541,30 @@ class AppState extends ChangeNotifier {
     final client = hostClient;
     if (client == null) return 'model hosts are not available';
     if (h.isRemote && !sshAvailable) return 'ssh is not installed';
-    final saved = hostById(h.id) != null;
-    if (h.isRemote) await tunnels?.ensure(h, retry: true);
     final r = await client.status(h);
-    if (h.isRemote && !saved) await tunnels?.close(h.id);
+    // The status goes over ssh itself; the agents need the forward. Try one
+    // on a free port under a test id, so a saved host's live forward is
+    // never repointed by values still being edited.
+    String? forward;
+    final t = tunnels;
+    if (h.isRemote && t != null && r is HostOk<HostStatus>) {
+      const id = '__test__';
+      final probe = ModelHost(
+        id: id,
+        label: h.label,
+        kind: HostKind.ssh,
+        sshTarget: h.sshTarget,
+        serverPort: h.serverPort,
+        localPort: await _freePort(),
+      );
+      await t.ensure(probe, retry: true);
+      final st = t.stateOf(id);
+      if (st.phase != TunnelPhase.up) {
+        forward = st.error ?? 'it did not open';
+      }
+      await t.close(id);
+    }
+    if (forward != null) return 'reachable, but the tunnel failed: $forward';
     return switch (r) {
       HostOk(:final value) => switch (value.state) {
         ServerState.ready => 'ready: ${value.label ?? value.recipe}',
@@ -557,6 +577,13 @@ class AppState extends ChangeNotifier {
       HostUnreachable(:final message) => message,
       HostFailed(:final message) => message,
     };
+  }
+
+  static Future<int> _freePort() async {
+    final s = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    final p = s.port;
+    await s.close();
+    return p;
   }
 
   /// Statuses for profiles of hosts added since the last [refresh].
@@ -613,6 +640,8 @@ class AppState extends ChangeNotifier {
       );
     } on StateError catch (e) {
       return e.message;
+    } on FileSystemException catch (e) {
+      return 'Could not write the agent config: ${e.message} (${e.path})';
     }
     final changed = await guard.changedSince(before);
     if (changed.isNotEmpty) {
@@ -694,7 +723,12 @@ class AppState extends ChangeNotifier {
 
   void open(Profile p, String cwd) {
     if (p.isLocal) {
-      openLocal(p, cwd);
+      openLocal(p, cwd).then((err) {
+        if (err != null) {
+          notice = err;
+          notifyListeners();
+        }
+      });
       return;
     }
     final title = _titleFor(p);
@@ -750,8 +784,9 @@ class AppState extends ChangeNotifier {
     _offer = [];
     for (final t in saved) {
       final p = profiles.where((x) => x.id == t.profileId).firstOrNull;
-      if (p == null || !canOpen(statusOf(p))) continue;
-      if (!Directory(t.cwd).existsSync()) continue;
+      if (p == null || !Directory(t.cwd).existsSync()) continue;
+      // A local tab says why it cannot open (open() sets the notice).
+      if (!p.isLocal && !canOpen(statusOf(p))) continue;
       open(p, t.cwd);
     }
     notifyListeners();

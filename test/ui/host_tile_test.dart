@@ -123,6 +123,7 @@ void main() {
   AppState makeState({
     List<ModelHost> hosts = const [local, pc],
     TunnelManager? tunnels,
+    AppStore? store,
   }) {
     runner = FakeRunner({
       'llm-host status': (_) => RunResult(0, jsonEncode(current), ''),
@@ -159,7 +160,7 @@ void main() {
       },
       parentEnv: {'HOME': realHome, 'PATH': '/bin'},
       defaultCwd: tmp.path,
-      store: AppStore('${tmp.path}/state.json'),
+      store: store ?? AppStore('${tmp.path}/state.json'),
       hosts: hosts,
       hostClient: HostClient(
         runner: runner,
@@ -473,6 +474,42 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('reopenLast reports a local tab that cannot open', (
+    tester,
+  ) async {
+    current = status('stopped');
+    final store = AppStore('${tmp.path}/state.json');
+    store.lastTabs = [SavedTab('pi-local', tmp.path)];
+    final state = makeState(hosts: const [local], store: store);
+    await pump(tester, state);
+    expect(state.canReopen, 1);
+    await tester.runAsync(() async {
+      state.reopenLast();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pump();
+    await tester.pump();
+    expect(state.tabs, isEmpty);
+    expect(
+      find.descendant(
+        of: find.byType(SnackBar),
+        matching: find.text('No model is running on This machine: start one'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('openLocal turns a file error into a sentence', (tester) async {
+    final state = await pump(tester, makeState(hosts: const [local]));
+    // The data folder is a file: writing the config fails.
+    File('$realHome/.local/share/ai-app').createSync(recursive: true);
+    final p = state.profiles.firstWhere((p) => p.id == 'pi-local');
+    String? err;
+    await tester.runAsync(() async => err = await state.openLocal(p, tmp.path));
+    expect(err, startsWith('Could not write the agent config'));
+    expect(state.tabs, isEmpty);
   });
 
   testWidgets('existing ALCF and account sections are still there', (

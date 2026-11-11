@@ -202,6 +202,47 @@ void main() {
     expect(save(tester).onPressed, isNotNull);
   });
 
+  testWidgets('Test is disabled while problems are listed', (tester) async {
+    await pump(tester, makeState([local]));
+    await openAdd(tester);
+    await tester.tap(find.byKey(const ValueKey('kind-ssh')));
+    await tester.pump();
+    await enter(tester, 'host-label', 'Mini');
+    final test = find.byKey(const ValueKey('host-test'));
+    expect(tester.widget<OutlinedButton>(test).onPressed, isNull);
+    await enter(tester, 'host-target', 'me@mini');
+    expect(tester.widget<OutlinedButton>(test).onPressed, isNotNull);
+  });
+
+  testWidgets('a new ssh host defaults to ~/.local/bin/llm-host', (
+    tester,
+  ) async {
+    await pump(tester, makeState([local]));
+    await openAdd(tester);
+    final cmd = find.byKey(const ValueKey('host-cmd'));
+    expect(tester.widget<TextField>(cmd).controller!.text, 'llm-host');
+    await tester.tap(find.byKey(const ValueKey('kind-ssh')));
+    await tester.pump();
+    expect(
+      tester.widget<TextField>(cmd).controller!.text,
+      '~/.local/bin/llm-host',
+    );
+  });
+
+  testWidgets('testHost uses its own tunnel and reports the forward', (
+    tester,
+  ) async {
+    final state = await pump(tester, makeState([local, pc]));
+    late String r;
+    await tester.runAsync(() async {
+      // An edited copy of pc with another target: the live pc tunnel is untouched.
+      r = await state.testHost(pc.copyWith(sshTarget: 'other'));
+    });
+    expect(r, 'ready: Q · 64K');
+    expect(state.tunnelOf('pc').phase, TunnelPhase.up);
+    expect(state.tunnels!.stateOf('pc').error, isNull);
+  });
+
   testWidgets('Test shows the one-line result', (tester) async {
     final state = await pump(tester, makeState([local]));
     Future<String> testWith(String answer) async {
@@ -225,8 +266,9 @@ void main() {
     expect(await testWith('stopped'), 'reachable, no model running');
     expect(await testWith('down'), 'ssh: Could not resolve hostname mini');
 
-    // and the button shows it
+    // and the button shows it (once the form has no problems)
     await openAdd(tester);
+    await enter(tester, 'host-label', 'Mini');
     await tester.tap(find.byKey(const ValueKey('host-test')));
     await tester.pumpAndSettle();
     expect(find.text('ready: Q · 64K'), findsOneWidget);
