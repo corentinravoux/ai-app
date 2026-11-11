@@ -24,11 +24,25 @@ def alive(pid):
         os.kill(pid, 0)
     except ProcessLookupError:
         return False
-    st = pathlib.Path(f"/proc/{pid}/stat").read_text().split(") ")[-1].split()[0]
-    return st != "Z"
+    r = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True)
+    return r.stdout.strip()[:1] not in ("", "Z")
+
+
+def kill_leftovers(marker):
+    """Kills processes whose command line mentions [marker] (a temp dir)."""
+    r = subprocess.run(["ps", "-eo", "pid=,command="], capture_output=True, text=True)
+    for line in r.stdout.splitlines():
+        pid, _, cmd = line.strip().partition(" ")
+        if marker in cmd and int(pid) != os.getpid():
+            try:
+                os.kill(int(pid), signal.SIGKILL)
+            except ProcessLookupError:
+                pass
 
 
 class LifecycleTests(unittest.TestCase):
+    EXTRA_ENV: dict = {}
+
     def setUp(self):
         self.port = free_port()
         self.h = TempHost(server_bin=str(FAKE), port=self.port)
@@ -43,10 +57,11 @@ class LifecycleTests(unittest.TestCase):
             if p.poll() is None:
                 p.kill()
                 p.wait()
+        kill_leftovers(str(self.h.root))
         self.h.cleanup()
 
     def cli(self, *args, env=None, timeout=60):
-        e = dict(self.h.env, **(env or {}))
+        e = dict(self.h.env, **self.EXTRA_ENV, **(env or {}))
         r = subprocess.run(
             [sys.executable, "-I", str(SCRIPT), *args, "--json"]
             if args[0] != "log" else [sys.executable, "-I", str(SCRIPT), *args],
@@ -131,7 +146,7 @@ class LifecycleTests(unittest.TestCase):
         self.assertFalse(alive(s1["pid"]))
 
     def _bg_start(self, recipe, *extra, env=None):
-        e = dict(self.h.env, **(env or {}))
+        e = dict(self.h.env, **self.EXTRA_ENV, **(env or {}))
         p = subprocess.Popen(
             [sys.executable, "-I", str(SCRIPT), "start", recipe, *extra, "--json"],
             env=e, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
@@ -162,6 +177,12 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(first.returncode, 0, out)
         _, st = self.cli("status")
         self.assertEqual((st["state"], st["recipe"]), ("ready", "r"))
+
+    def test_status_ctx_is_null_when_props_fails(self):
+        code, s = self.cli("start", "r", env={"FAKE_NO_PROPS": "1"})
+        self.assertEqual(code, 0, s)
+        self.assertEqual(s["state"], "ready")
+        self.assertIsNone(s["ctx"])
 
     def test_status_reports_foreign_when_the_port_answers_without_our_pidfile(self):
         self.foreign()
@@ -221,6 +242,12 @@ class LifecycleTests(unittest.TestCase):
         _, s = self.cli("status")
         self.assertEqual(s["state"], "stopped")
         self.assertEqual(self.cli("stop")[0], 0)  # and we are still alive
+
+
+class LifecycleTestsWithoutProc(LifecycleTests):
+    """The same lifecycle through `ps`, as on macOS (no /proc)."""
+
+    EXTRA_ENV = {"LLM_HOST_NO_PROC": "1"}
 
 
 if __name__ == "__main__":

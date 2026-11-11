@@ -48,7 +48,10 @@ class H(http.server.BaseHTTPRequestHandler):
         if self.path == "/health":
             self._json(200 if ready else 503, {"status": "ok" if ready else "loading"})
         elif self.path == "/props":
-            self._json(200, {"default_generation_settings": {"n_ctx": ctx}, "total_slots": 1})
+            if os.environ.get("FAKE_NO_PROPS"):
+                self._json(500, {"error": "no props"})
+            else:
+                self._json(200, {"default_generation_settings": {"n_ctx": ctx}, "total_slots": 1})
         else:
             self._json(404, {})
 
