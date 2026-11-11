@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:ai_app/core/launch.dart' show agentPathFor, kMacExtraBinDirs;
 import 'package:ai_app/core/platform_paths.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -111,6 +112,36 @@ void main() {
         reason: 'default PATHEXT',
       );
     });
+  });
+
+  test('agentPath on Windows adds the npm folder and joins with ;', () {
+    final tmp = Directory.systemTemp.createTempSync('aiapp_ap_');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    Directory('${tmp.path}/Roaming/npm').createSync(recursive: true);
+    final p = agentPathFor(
+      {'PATH': r'C:\Windows;C:\Tools', 'APPDATA': '${tmp.path}/Roaming'},
+      tmp.path,
+      HostOs.windows,
+    );
+    expect(p.split(';'), [
+      r'C:\Windows',
+      r'C:\Tools',
+      '${tmp.path}/Roaming/npm',
+    ]);
+  });
+
+  test('agentPath on macOS adds Homebrew folders that exist', () {
+    final p = agentPathFor(
+      {'PATH': '/usr/bin:/bin'},
+      '/nonexistent-home',
+      HostOs.macos,
+    );
+    final parts = p.split(':');
+    expect(parts.take(2), ['/usr/bin', '/bin']);
+    for (final d in parts.skip(2)) {
+      expect(['/opt/homebrew/bin', '/usr/local/bin'], contains(d));
+    }
+    expect(kMacExtraBinDirs, ['/opt/homebrew/bin', '/usr/local/bin']);
   });
 
   test('currentOs matches the test machine', () {
