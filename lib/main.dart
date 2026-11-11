@@ -25,10 +25,10 @@ Future<void> main() async {
   final realHome = homeDir(Platform.environment, os);
   // Agents installed in ~/.opencode/bin and the like are often missing from
   // a desktop session's PATH: add them for lookup, configure and launch.
-  final env = {
-    ...Platform.environment,
-    'PATH': agentPath(Platform.environment, realHome),
-  };
+  final env = normalizePathKey({
+    ...normalizePathKey(Platform.environment, os),
+    'PATH': agentPath(normalizePathKey(Platform.environment, os), realHome),
+  }, os);
   final sandbox = Sandbox(
     root: '$realHome/.local/share/alcfai/home',
     realHome: realHome,
@@ -72,9 +72,13 @@ Future<void> main() async {
     (exe) => whichOnPath(exe, env),
   );
   final sshExe = whichOnPath('ssh', env);
-  final controlDir = '$dataRoot/ssh';
-  await Directory(controlDir).create(recursive: true);
-  if (os != HostOs.windows) await Process.run('chmod', ['700', controlDir]);
+  final controlDir = sshControlDir(Platform.environment, os);
+  if (os != HostOs.windows) {
+    final dotSsh = Directory('$realHome/.ssh');
+    final fresh = !dotSsh.existsSync();
+    await Directory(controlDir).create(recursive: true);
+    await Process.run('chmod', ['700', controlDir, if (fresh) dotSsh.path]);
+  }
   final claudeDirs = [for (final a in accounts) a.dir];
 
   // New sessions start in the last folder used, else the home folder.
@@ -120,6 +124,7 @@ Future<void> main() async {
     ],
   );
 
+  state.notice = recoveredNotice(registry);
   runApp(AiApp(state: state, onConfigure: showConfigureDialog));
   sandbox.ensure().then((_) => state.refresh());
   state.startLoginChecks();

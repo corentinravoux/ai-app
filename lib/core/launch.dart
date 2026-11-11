@@ -96,16 +96,31 @@ const kMacExtraBinDirs = ['/opt/homebrew/bin', '/usr/local/bin'];
 
 /// [agentPath] for a given OS. On Windows npm puts its shims in
 /// `%APPDATA%\npm`, which is added too.
-String agentPathFor(Map<String, String> env, String realHome, HostOs os) {
+String agentPathFor(
+  Map<String, String> env,
+  String realHome,
+  HostOs os, {
+  List<String> macExtraDirs = kMacExtraBinDirs,
+}) {
   final sep = pathSep(os);
   final dirs = [
     for (final d in (env['PATH'] ?? '').split(sep))
       if (d.isNotEmpty) d,
   ];
+  // macOS: Homebrew first, as `brew shellenv` does, so python3 and node are
+  // Homebrew's and not Apple's older copies in /usr/bin.
+  if (os == HostOs.macos) {
+    final brew = [
+      for (final d in macExtraDirs)
+        if (Directory(d).existsSync()) d,
+    ];
+    dirs
+      ..removeWhere(brew.contains)
+      ..insertAll(0, brew);
+  }
   final extra = [
     for (final d in kAgentBinDirs) '$realHome/$d',
     if (os == HostOs.windows && env['APPDATA'] != null) '${env['APPDATA']}/npm',
-    if (os == HostOs.macos) ...kMacExtraBinDirs,
   ];
   for (final full in extra) {
     if (!dirs.contains(full) && Directory(full).existsSync()) dirs.add(full);

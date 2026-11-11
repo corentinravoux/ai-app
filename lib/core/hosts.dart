@@ -88,7 +88,6 @@ class HostRegistry {
 
   final String path;
 
-  /// Hosts in file order; unreadable entries (or a corrupt file) are skipped.
   /// Where the last [load] moved an unreadable file, or null.
   String? lastLoadRecovered;
 
@@ -104,6 +103,8 @@ class HostRegistry {
       v = jsonDecode(f.readAsStringSync());
     } on FormatException {
       v = null;
+    } on FileSystemException {
+      v = null; // not UTF-8: treat like any unreadable file
     }
     final list = v is Map ? v['hosts'] : null;
     if (list is! List) {
@@ -204,6 +205,13 @@ String hostIdFromLabel(String label) {
   if (s.isEmpty) return 'host';
   return s.length > 32 ? s.substring(0, 32).replaceAll(RegExp(r'-+$'), '') : s;
 }
+
+/// The sentence to show after [HostRegistry.load] moved a file aside, or
+/// null.
+String? recoveredNotice(HostRegistry r) => r.lastLoadRecovered == null
+    ? null
+    : 'hosts.json could not be read; your hosts list starts over. '
+          'The old file is kept as ${r.lastLoadRecovered}.';
 
 /// The saved hosts; on a first start (no file yet, or an unreadable one
 /// moved aside) "This machine" when llm-host is installed here. A user who

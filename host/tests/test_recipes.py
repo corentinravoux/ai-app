@@ -135,6 +135,29 @@ class RecipeTests(unittest.TestCase):
         finally:
             os.environ["PATH"] = old
 
+    def test_server_bin_with_a_space_is_recognised_through_ps(self):
+        import os, shutil, subprocess, sys, time
+        from .test_lifecycle import FAKE, free_port, kill_leftovers
+        d = self.h.root / "llama cpp"
+        d.mkdir()
+        fake = d / "llama-server"
+        shutil.copy(FAKE, fake)
+        fake.chmod(0o755)
+        port = free_port()
+        self.h.config.write_text(
+            f'server_bin = "{fake}"\nmodels_dir = "{self.h.models}"\nport = {port}\n')
+        self.h.model()
+        self.h.recipe("r", good_recipe())
+        env = dict(self.h.env, LLM_HOST_NO_PROC="1")
+        try:
+            r = subprocess.run([sys.executable, "-I", str(SCRIPT), "start", "r", "--wait", "20", "--json"],
+                               env=env, capture_output=True, text=True, timeout=60)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        finally:
+            subprocess.run([sys.executable, "-I", str(SCRIPT), "stop", "--json"],
+                           env=env, capture_output=True, timeout=60)
+            kill_leftovers(str(self.h.root))
+
     def test_ps_fallback_matches_proc(self):
         import os
         pid = os.getpid()
