@@ -419,7 +419,12 @@ def compute_status(cfg: Config, gpu: bool = True) -> dict:
             out["state"] = "loading"
         return out
     if pid is not None:
-        st.pidfile.unlink(missing_ok=True)  # stale: process gone or not ours
+        # Stale: process gone or not ours. Re-read under the lock: a start
+        # may have written a new pid since our read (app polling during a
+        # model switch deleted the new server's pidfile otherwise).
+        with _locked(cfg):
+            if st.pid() == pid:
+                st.pidfile.unlink(missing_ok=True)
     if health is not None:
         out["state"] = "foreign"
         out["error"] = f"a llama-server not started by llm-host is using port {cfg.port}"
@@ -456,18 +461,32 @@ def _terminate(pid: int) -> None:
 import contextlib
 
 
+_lock_depth = 0
+
+
 @contextlib.contextmanager
 def _locked(cfg: Config):
-    """Serialises start and stop between llm-host processes on this host."""
+    """Serialises start, stop and pidfile cleanup between llm-host processes
+    on this host. Re-entrant within one process."""
     import fcntl
 
+    global _lock_depth
+    if _lock_depth:
+        _lock_depth += 1
+        try:
+            yield
+        finally:
+            _lock_depth -= 1
+        return
     d = pathlib.Path(cfg.state_dir)
     d.mkdir(parents=True, exist_ok=True)
     with open(d / "lock", "w") as f:
         fcntl.flock(f, fcntl.LOCK_EX)
+        _lock_depth = 1
         try:
             yield
         finally:
+            _lock_depth = 0
             fcntl.flock(f, fcntl.LOCK_UN)
 
 
@@ -560,9 +579,24 @@ def cmd_start(cfg: Config, a: argparse.Namespace) -> int:
         _print(s, a.json, _status_text(s))
         return code
 
+    def still_ours() -> bool:
+        """This start still owns the state files. A missing pidfile with
+        state.json naming this very start was deleted by mistake: put it
+        back. Another pid, or a stop, means a later start or stop won."""
+        with _locked(cfg):
+            cur = st.pid()
+            if cur == p.pid:
+                return True
+            info = st.info()
+            if (cur is None and info.get("started") == started
+                    and info.get("recipe") == r.name and not info.get("stopped")):
+                st.pidfile.write_text(str(p.pid))
+                return True
+            return False
+
     end = time.monotonic() + max(a.wait, 0)
     while True:
-        if st.pid() != p.pid:
+        if st.pid() != p.pid and not still_ours():
             # Replaced by a later start (or stopped): its outcome is not ours
             # to report as a failure, and its files are not ours to touch.
             if p.poll() is None:
@@ -570,7 +604,7 @@ def cmd_start(cfg: Config, a: argparse.Namespace) -> int:
             return finish(EXIT_OK)
         if p.poll() is not None:
             with _locked(cfg):
-                if st.pid() != p.pid:
+                if not still_ours():
                     return finish(EXIT_OK)
                 st.pidfile.unlink(missing_ok=True)
                 info = st.info()
@@ -583,7 +617,7 @@ def cmd_start(cfg: Config, a: argparse.Namespace) -> int:
             return EXIT_OK
         if time.monotonic() >= end:
             with _locked(cfg):
-                if st.pid() != p.pid:
+                if not still_ours():
                     return finish(EXIT_OK)
                 _terminate(p.pid)
                 st.pidfile.unlink(missing_ok=True)

@@ -168,6 +168,23 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual((st["state"], st["recipe"]), ("ready", "r2"))
         self.assertIsNone(st["error"])
 
+    def test_a_lost_pidfile_during_load_does_not_kill_the_new_server(self):
+        # A concurrent `status` may delete the pidfile on a stale read (seen
+        # with the app polling during a model switch). The start must keep
+        # its server and put the pidfile back.
+        first = self._bg_start("r", "--wait", "60", env={"FAKE_BOOT_SECONDS": "3"})
+        pidfile = self.h.home / ".local/state/llm-host/server.pid"
+        for _ in range(100):
+            if pidfile.exists():
+                break
+            time.sleep(0.05)
+        pid = int(pidfile.read_text())
+        pidfile.unlink()
+        out, _ = first.communicate(timeout=60)
+        self.assertEqual(first.returncode, 0, out)
+        _, st = self.cli("status")
+        self.assertEqual((st["state"], st["recipe"], st["pid"]), ("ready", "r", pid))
+
     def test_two_starts_at_once_do_not_steal_each_other(self):
         first = self._bg_start("r", "--wait", "60", env={"FAKE_BOOT_SECONDS": "3"})
         time.sleep(0.8)
