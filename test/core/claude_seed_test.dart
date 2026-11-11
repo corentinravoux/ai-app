@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:alcfai_app/core/claude_seed.dart';
+import 'package:ai_app/core/claude_seed.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const shared = {
@@ -39,7 +39,7 @@ void main() {
     late String sandboxPath;
 
     setUp(() {
-      tmp = Directory.systemTemp.createTempSync('alcfai_seed_');
+      tmp = Directory.systemTemp.createTempSync('aiapp_seed_');
       sharedPath = '${tmp.path}/shared/settings.json';
       File(sharedPath)
         ..createSync(recursive: true)

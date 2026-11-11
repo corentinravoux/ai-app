@@ -4,12 +4,12 @@
 //   dart run tool/e2e_configure.dart claude pi
 import 'dart:io';
 
-import 'package:alcfai_app/core/agents.dart';
-import 'package:alcfai_app/core/alcf_cli.dart';
-import 'package:alcfai_app/core/guard.dart';
-import 'package:alcfai_app/core/launch.dart';
-import 'package:alcfai_app/core/runner.dart';
-import 'package:alcfai_app/core/sandbox.dart';
+import 'package:ai_app/core/agents.dart';
+import 'package:ai_app/core/alcf_cli.dart';
+import 'package:ai_app/core/guard.dart';
+import 'package:ai_app/core/launch.dart';
+import 'package:ai_app/core/runner.dart';
+import 'package:ai_app/core/sandbox.dart';
 
 Future<void> main(List<String> agents) async {
   final env = Platform.environment;

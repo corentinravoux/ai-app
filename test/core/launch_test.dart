@@ -1,10 +1,10 @@
 import 'dart:io';
 
-import 'package:alcfai_app/core/agents.dart';
-import 'package:alcfai_app/core/app_store.dart';
-import 'package:alcfai_app/core/launch.dart';
-import 'package:alcfai_app/core/profiles.dart';
-import 'package:alcfai_app/core/sandbox.dart';
+import 'package:ai_app/core/agents.dart';
+import 'package:ai_app/core/app_store.dart';
+import 'package:ai_app/core/launch.dart';
+import 'package:ai_app/core/profiles.dart';
+import 'package:ai_app/core/sandbox.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -96,7 +96,7 @@ void main() {
   });
 
   test('whichOnPath finds executables only', () {
-    final tmp = Directory.systemTemp.createTempSync('alcfai_which_');
+    final tmp = Directory.systemTemp.createTempSync('aiapp_which_');
     addTearDown(() => tmp.deleteSync(recursive: true));
     final a = Directory('${tmp.path}/a')..createSync();
     final b = Directory('${tmp.path}/b')..createSync();
@@ -110,7 +110,7 @@ void main() {
   });
 
   test('piModelArgs picks the provider that serves the chosen model', () {
-    final tmp = Directory.systemTemp.createTempSync('alcfai_pi_');
+    final tmp = Directory.systemTemp.createTempSync('aiapp_pi_');
     addTearDown(() => tmp.deleteSync(recursive: true));
     final box = Sandbox(root: '${tmp.path}/home', realHome: tmp.path);
     File('${box.home}/.pi/agent/models.json')
@@ -144,7 +144,7 @@ void main() {
   });
 
   test('modelArgs for opencode reads provider (v1) or providers (v2)', () {
-    final tmp = Directory.systemTemp.createTempSync('alcfai_oc_');
+    final tmp = Directory.systemTemp.createTempSync('aiapp_oc_');
     addTearDown(() => tmp.deleteSync(recursive: true));
     final box = Sandbox(root: '${tmp.path}/home', realHome: tmp.path);
     final f = File('${box.home}/.config/opencode/opencode.jsonc')
@@ -172,7 +172,7 @@ void main() {
   });
 
   test('modelArgs for codex uses the alcf-ai profile file', () {
-    final tmp = Directory.systemTemp.createTempSync('alcfai_cx_');
+    final tmp = Directory.systemTemp.createTempSync('aiapp_cx_');
     addTearDown(() => tmp.deleteSync(recursive: true));
     final box = Sandbox(root: '${tmp.path}/home', realHome: tmp.path);
     File('${box.home}/.codex/alcf-minerva-gpt-oss-120b.config.toml')
@@ -196,7 +196,7 @@ void main() {
   });
 
   test('agentPath appends existing agent install folders once', () {
-    final tmp = Directory.systemTemp.createTempSync('alcfai_path_');
+    final tmp = Directory.systemTemp.createTempSync('aiapp_path_');
     addTearDown(() => tmp.deleteSync(recursive: true));
     final h = tmp.path;
     for (final d in ['.local/bin', '.opencode/bin']) {
@@ -222,7 +222,7 @@ void main() {
   });
 
   test('detectClaudeAccounts: ~/.claude plus logged-in ~/.claude-* homes', () {
-    final tmp = Directory.systemTemp.createTempSync('alcfai_acc_');
+    final tmp = Directory.systemTemp.createTempSync('aiapp_acc_');
     addTearDown(() => tmp.deleteSync(recursive: true));
     final h = tmp.path;
     File('$h/.claude-work/.credentials.json').createSync(recursive: true);

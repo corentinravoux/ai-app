@@ -1,16 +1,16 @@
 import 'dart:io';
 
-import 'package:alcfai_app/app/app_state.dart';
-import 'package:alcfai_app/app/layout.dart';
-import 'package:alcfai_app/core/alcf_cli.dart';
-import 'package:alcfai_app/core/agents.dart';
-import 'package:alcfai_app/core/app_store.dart';
-import 'package:alcfai_app/core/guard.dart';
-import 'package:alcfai_app/core/launch.dart';
-import 'package:alcfai_app/core/profiles.dart';
-import 'package:alcfai_app/core/runner.dart';
-import 'package:alcfai_app/core/sandbox.dart';
-import 'package:alcfai_app/core/term_tools.dart';
+import 'package:ai_app/app/app_state.dart';
+import 'package:ai_app/app/layout.dart';
+import 'package:ai_app/core/alcf_cli.dart';
+import 'package:ai_app/core/agents.dart';
+import 'package:ai_app/core/app_store.dart';
+import 'package:ai_app/core/guard.dart';
+import 'package:ai_app/core/launch.dart';
+import 'package:ai_app/core/profiles.dart';
+import 'package:ai_app/core/runner.dart';
+import 'package:ai_app/core/sandbox.dart';
+import 'package:ai_app/core/term_tools.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/fake_runner.dart';
@@ -58,7 +58,7 @@ void main() {
   Profile p(AppState s, String id) => s.profiles.firstWhere((x) => x.id == id);
 
   setUp(() {
-    tmp = Directory.systemTemp.createTempSync('alcfai_state_');
+    tmp = Directory.systemTemp.createTempSync('aiapp_state_');
     realHome = '${tmp.path}/home';
     sb = Sandbox(
       root: '$realHome/.local/share/alcfai/home',
