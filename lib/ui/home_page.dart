@@ -52,6 +52,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _open(BuildContext context, ProfileStatus s) async {
     final p = s.profile;
+    if (p.isLocal) return _openLocal(context, s);
     String? warning;
     final status = await state.statusFor(p);
     final c = state.choiceFor(p);
@@ -76,8 +77,36 @@ class _HomePageState extends State<HomePage> {
     if (cwd != null) state.open(p, cwd);
   }
 
+  Future<void> _openLocal(BuildContext context, ProfileStatus s) async {
+    final p = s.profile;
+    final cwd = await showNewSessionDialog(
+      context,
+      p.label,
+      state.defaultCwd,
+      recent: state.recentFolders,
+      pickFolder: widget.pickFolder,
+    );
+    if (cwd == null) return;
+    final err = await state.openLocal(p, cwd);
+    if (err != null && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+    }
+  }
+
+  void _showNotice(BuildContext context) {
+    final n = state.notice;
+    if (n == null) return;
+    state.notice = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(n)));
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    _showNotice(context);
     return ListenableBuilder(
       listenable: state,
       builder: (context, _) => Scaffold(
