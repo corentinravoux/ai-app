@@ -48,7 +48,7 @@ void main() {
       expect(back[0].llmHostCmd, 'llm-host');
       expect(
         Directory('${tmp.path}/cfg/ai-app').listSync().map((e) => e.path),
-        ['$path'],
+        [path],
         reason: 'no temp file left behind',
       );
     });
