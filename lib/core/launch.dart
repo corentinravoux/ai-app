@@ -89,6 +89,11 @@ const kAgentBinDirs = [
 String agentPath(Map<String, String> env, String realHome) =>
     agentPathFor(env, realHome, currentOs());
 
+/// Homebrew's folders: an app started from Finder gets only
+/// /usr/bin:/bin:/usr/sbin:/sbin, without node, python3 ≥ 3.11 or ssh-agent
+/// helpers installed by Homebrew.
+const kMacExtraBinDirs = ['/opt/homebrew/bin', '/usr/local/bin'];
+
 /// [agentPath] for a given OS. On Windows npm puts its shims in
 /// `%APPDATA%\npm`, which is added too.
 String agentPathFor(Map<String, String> env, String realHome, HostOs os) {
@@ -100,6 +105,7 @@ String agentPathFor(Map<String, String> env, String realHome, HostOs os) {
   final extra = [
     for (final d in kAgentBinDirs) '$realHome/$d',
     if (os == HostOs.windows && env['APPDATA'] != null) '${env['APPDATA']}/npm',
+    if (os == HostOs.macos) ...kMacExtraBinDirs,
   ];
   for (final full in extra) {
     if (!dirs.contains(full) && Directory(full).existsSync()) dirs.add(full);
