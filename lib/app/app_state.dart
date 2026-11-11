@@ -71,6 +71,7 @@ class AppState extends ChangeNotifier {
     this.guardedRoots = const [],
     this.guardPaths = const [],
     this.sshAvailable = true,
+    this.alcfMissing = 'alcf-ai is not installed',
   }) : baseProfiles = profiles,
        hosts = List.of(hosts),
        _offer = List.of(store.lastTabs) {
@@ -101,6 +102,9 @@ class AppState extends ChangeNotifier {
 
   /// False when ssh is missing: remote hosts cannot be reached.
   final bool sshAvailable;
+
+  /// What the sidebar says when [alcf] is null.
+  final String alcfMissing;
   final Which which;
   final Sandbox sandbox;
 

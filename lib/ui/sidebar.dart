@@ -112,7 +112,7 @@ class _LoginLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (text, color) = !state.alcfAvailable
-        ? ('alcf-ai is not installed', Tok.danger)
+        ? (state.alcfMissing, Tok.danger)
         : state.alcfLoggedIn
         ? ('Signed in to ALCF', Tok.running)
         : ('Not signed in to ALCF', Tok.queued);
