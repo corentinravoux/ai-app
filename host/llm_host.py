@@ -410,6 +410,24 @@ def _zombie(pid: int) -> bool:
         return True
 
 
+import contextlib
+
+
+@contextlib.contextmanager
+def _locked(cfg: Config):
+    """Serialises start and stop between llm-host processes on this host."""
+    import fcntl
+
+    d = pathlib.Path(cfg.state_dir)
+    d.mkdir(parents=True, exist_ok=True)
+    with open(d / "lock", "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
 def stop_server(cfg: Config) -> None:
     st = State(cfg)
     pid = st.pid()
@@ -440,11 +458,12 @@ def cmd_status(cfg: Config, a: argparse.Namespace) -> int:
 
 
 def cmd_stop(cfg: Config, a: argparse.Namespace) -> int:
-    s = compute_status(cfg)
-    if s["state"] == "foreign":
-        _print(s, a.json, _status_text(s))
-        return EXIT_FOREIGN
-    stop_server(cfg)
+    with _locked(cfg):
+        s = compute_status(cfg)
+        if s["state"] == "foreign":
+            _print(s, a.json, _status_text(s))
+            return EXIT_FOREIGN
+        stop_server(cfg)
     s = compute_status(cfg)
     _print(s, a.json, _status_text(s))
     return EXIT_OK
@@ -470,52 +489,66 @@ def cmd_start(cfg: Config, a: argparse.Namespace) -> int:
                     else f"unknown recipe {a.recipe}")
     if not r.model_present:
         return fail(EXIT_UNKNOWN, f"model file missing for {r.name}: {cfg.models_dir}/{r.model}")
-    s = compute_status(cfg)
-    if s["state"] == "foreign":
-        return fail(EXIT_FOREIGN, s["error"])
-    if s["state"] in ("ready", "loading"):
-        if not a.replace:
-            return fail(EXIT_RUNNING, f"{s['recipe']} is already running: use --replace")
-        stop_server(cfg)
-
     st = State(cfg)
-    st.dir.mkdir(parents=True, exist_ok=True)
-    started = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
-    with open(st.log, "wb") as log:
-        p = subprocess.Popen(
-            build_command(cfg, r), stdout=log, stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL, start_new_session=True, close_fds=True,
-        )
-    st.pidfile.write_text(str(p.pid))
-    st.write_info({
-        "recipe": r.name, "label": r.label, "ctx": r.ctx, "max_output": r.max_output,
-        "vision": r.vision, "started": started, "stopped": False,
-    })
+    with _locked(cfg):
+        # Check, stop and spawn under the lock: a second start (another app,
+        # the laptop) waits here and then sees this one as running.
+        s = compute_status(cfg)
+        if s["state"] == "foreign":
+            return fail(EXIT_FOREIGN, s["error"])
+        if s["state"] in ("ready", "loading"):
+            if not a.replace:
+                return fail(EXIT_RUNNING, f"{s['recipe']} is already running: use --replace")
+            stop_server(cfg)
+        started = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+        with open(st.log, "wb") as log:
+            p = subprocess.Popen(
+                build_command(cfg, r), stdout=log, stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL, start_new_session=True, close_fds=True,
+            )
+        st.pidfile.write_text(str(p.pid))
+        st.write_info({
+            "recipe": r.name, "label": r.label, "ctx": r.ctx, "max_output": r.max_output,
+            "vision": r.vision, "started": started, "stopped": False,
+        })
+
+    def finish(code: int) -> int:
+        s = compute_status(cfg)
+        _print(s, a.json, _status_text(s))
+        return code
 
     end = time.monotonic() + max(a.wait, 0)
     while True:
+        if st.pid() != p.pid:
+            # Replaced by a later start (or stopped): its outcome is not ours
+            # to report as a failure, and its files are not ours to touch.
+            if p.poll() is None:
+                _terminate(p.pid)
+            return finish(EXIT_OK)
         if p.poll() is not None:
-            st.pidfile.unlink(missing_ok=True)
-            info = st.info()
-            info["error"] = st.tail(20) or f"llama-server exited with code {p.returncode}"
-            st.write_info(info)
-            s = compute_status(cfg)
-            _print(s, a.json, _status_text(s))
-            return EXIT_FAILED
+            with _locked(cfg):
+                if st.pid() != p.pid:
+                    return finish(EXIT_OK)
+                st.pidfile.unlink(missing_ok=True)
+                info = st.info()
+                info["error"] = st.tail(20) or f"llama-server exited with code {p.returncode}"
+                st.write_info(info)
+            return finish(EXIT_FAILED)
         s = compute_status(cfg)
         if s["state"] == "ready" or a.wait <= 0:
             _print(s, a.json, _status_text(s))
             return EXIT_OK
         if time.monotonic() >= end:
-            _terminate(p.pid)
-            st.pidfile.unlink(missing_ok=True)
-            info = st.info()
-            info["error"] = (f"llama-server did not become ready within {a.wait:g} s\n"
-                             + st.tail(20))
-            st.write_info(info)
-            s = compute_status(cfg)
-            _print(s, a.json, _status_text(s))
-            return EXIT_FAILED
+            with _locked(cfg):
+                if st.pid() != p.pid:
+                    return finish(EXIT_OK)
+                _terminate(p.pid)
+                st.pidfile.unlink(missing_ok=True)
+                info = st.info()
+                info["error"] = (f"llama-server did not become ready within {a.wait:g} s\n"
+                                 + st.tail(20))
+                st.write_info(info)
+            return finish(EXIT_FAILED)
         time.sleep(0.25)
 
 

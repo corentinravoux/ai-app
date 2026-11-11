@@ -130,6 +130,39 @@ class LifecycleTests(unittest.TestCase):
         self.assertNotEqual(s["pid"], s1["pid"])
         self.assertFalse(alive(s1["pid"]))
 
+    def _bg_start(self, recipe, *extra, env=None):
+        e = dict(self.h.env, **(env or {}))
+        p = subprocess.Popen(
+            [sys.executable, "-I", str(SCRIPT), "start", recipe, *extra, "--json"],
+            env=e, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        self.extra.append(p)
+        return p
+
+    def test_switch_while_loading_keeps_the_new_server_ours(self):
+        first = self._bg_start("r", "--wait", "60", env={"FAKE_BOOT_SECONDS": "30"})
+        time.sleep(1.5)
+        code, s = self.cli("start", "r2", "--replace")
+        self.assertEqual(code, 0, s)
+        self.assertEqual((s["state"], s["recipe"]), ("ready", "r2"))
+        out, _ = first.communicate(timeout=60)
+        self.assertEqual(first.returncode, 0, out)
+        self.assertEqual(json.loads(out)["recipe"], "r2")
+        time.sleep(0.5)
+        _, st = self.cli("status")
+        self.assertEqual((st["state"], st["recipe"]), ("ready", "r2"))
+        self.assertIsNone(st["error"])
+
+    def test_two_starts_at_once_do_not_steal_each_other(self):
+        first = self._bg_start("r", "--wait", "60", env={"FAKE_BOOT_SECONDS": "3"})
+        time.sleep(0.8)
+        code, s = self.cli("start", "r2")
+        self.assertEqual(code, 4, s)
+        out, _ = first.communicate(timeout=60)
+        self.assertEqual(first.returncode, 0, out)
+        _, st = self.cli("status")
+        self.assertEqual((st["state"], st["recipe"]), ("ready", "r"))
+
     def test_status_reports_foreign_when_the_port_answers_without_our_pidfile(self):
         self.foreign()
         _, s = self.cli("status")
