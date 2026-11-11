@@ -107,6 +107,7 @@ Future<void> main() async {
       start: startIoProc,
       probe: tcpProbe,
       sshExe: sshExe ?? 'ssh',
+      portInUse: tcpProbe,
     ),
     dataRoot: dataRoot,
     sshAvailable: sshExe != null,

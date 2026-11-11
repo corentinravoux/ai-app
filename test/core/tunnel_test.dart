@@ -287,6 +287,55 @@ exec python3 -c "import socket,time; s=socket.socket(); s.setsockopt(socket.SOL_
     },
   );
 
+  test('a port that already answers is refused before ssh starts', () async {
+    final starts = <List<String>>[];
+    final m = TunnelManager(
+      start: (exe, args) async {
+        starts.add(args);
+        return FakeProc();
+      },
+      probe: (_) async => true,
+      sshExe: '/usr/bin/ssh',
+      probeEvery: Duration.zero,
+      portInUse: (port) async => port == 19931,
+    );
+    await m.ensure(pc);
+    expect(starts, isEmpty);
+    expect(m.stateOf('pc').phase, TunnelPhase.down);
+    expect(m.stateOf('pc').error, 'port 19931 is already in use on this machine');
+    // fatal: polling does not try again, an explicit retry checks again
+    await m.ensure(pc);
+    expect(starts, isEmpty);
+    await m.ensure(pc.copyWith(localPort: 19932), retry: true);
+    expect(starts, hasLength(1));
+    expect(m.stateOf('pc').phase, TunnelPhase.up);
+    await m.dispose();
+  });
+
+  test('a forward started after close is killed, not left running', () async {
+    final gate = Completer<void>();
+    final procs = <FakeProc>[];
+    final m = TunnelManager(
+      start: (exe, args) async {
+        await gate.future;
+        final p = FakeProc();
+        procs.add(p);
+        return p;
+      },
+      probe: (_) async => true,
+      sshExe: '/usr/bin/ssh',
+      probeEvery: Duration.zero,
+    );
+    final f = m.ensure(pc);
+    await Future<void>.delayed(Duration.zero);
+    await m.close('pc'); // ssh has not started yet: nothing to kill here
+    gate.complete();
+    await f;
+    expect(procs.single.killed, isTrue);
+    expect(m.stateOf('pc').phase, TunnelPhase.down);
+    await m.dispose();
+  });
+
   test('dispose closes all', () async {
     final r = Rig();
     await r.m.ensure(pc);
