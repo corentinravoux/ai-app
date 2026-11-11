@@ -221,7 +221,7 @@ Future<bool> _confirmLoss(
   return ok == true;
 }
 
-class _RecipeMenu extends StatelessWidget {
+class _RecipeMenu extends StatefulWidget {
   const _RecipeMenu({
     required this.state,
     required this.host,
@@ -233,49 +233,114 @@ class _RecipeMenu extends StatelessWidget {
   final bool enabled;
 
   @override
-  Widget build(BuildContext context) {
+  State<_RecipeMenu> createState() => _RecipeMenuState();
+}
+
+class _RecipeMenuState extends State<_RecipeMenu> {
+  /// True while the menu opened by the button is on screen.
+  bool _open = false;
+
+  AppState get state => widget.state;
+  ModelHost get host => widget.host;
+
+  bool get _switching {
     final s = state.statusOfHost(host.id);
-    final switching =
-        s?.state == ServerState.ready || s?.state == ServerState.loading;
-    final recipes = state.recipesOf(host.id);
+    return s?.state == ServerState.ready || s?.state == ServerState.loading;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final switching = _switching;
     return PopupMenuButton<String>(
       key: ValueKey('host-menu-${host.id}'),
-      enabled: enabled,
+      enabled: widget.enabled,
       tooltip: switching ? 'Switch model' : 'Start a model',
       icon: Icon(
         switching ? Icons.swap_horiz_rounded : Icons.play_circle_outline,
       ),
-      onOpened: () => state.refreshRecipes(host.id),
-      onSelected: (name) => _start(context, name),
-      itemBuilder: (context) => [
-        PopupMenuItem<String>(
-          enabled: false,
-          height: 32,
-          child: Text(
-            switching ? 'Switch model' : 'Start',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ),
-        if (recipes.isEmpty)
-          const PopupMenuItem<String>(
-            enabled: false,
-            child: Text('No recipes on this host: see docs/hosts.md'),
-          ),
-        for (final r in recipes)
-          PopupMenuItem<String>(
-            key: ValueKey('recipe-${r.name}'),
-            value: r.name,
-            enabled: r.modelPresent,
-            child: r.modelPresent
-                ? Text(r.label)
-                : Tooltip(
-                    message: 'model file missing on ${host.label}',
-                    child: Text(r.label),
-                  ),
-          ),
-      ],
+      onOpened: _opened,
+      onCanceled: () => _open = false,
+      onSelected: (name) {
+        _open = false;
+        _start(context, name);
+      },
+      itemBuilder: _items,
     );
   }
+
+  /// Built when the menu opens, from the recipes known at that moment.
+  List<PopupMenuEntry<String>> _items(BuildContext context) {
+    final recipes = state.recipesOf(host.id);
+    return [
+      PopupMenuItem<String>(
+        enabled: false,
+        height: 32,
+        child: Text(
+          _switching ? 'Switch model' : 'Start',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ),
+      if (recipes.isEmpty)
+        const PopupMenuItem<String>(
+          enabled: false,
+          child: Text('No recipes on this host: see docs/hosts.md'),
+        ),
+      for (final r in recipes)
+        PopupMenuItem<String>(
+          key: ValueKey('recipe-${r.name}'),
+          value: r.name,
+          enabled: r.modelPresent,
+          child: r.modelPresent
+              ? Text(r.label)
+              : Tooltip(
+                  message: 'model file missing on ${host.label}',
+                  child: Text(r.label),
+                ),
+        ),
+    ];
+  }
+
+  /// The menu on screen was built before this refresh: when the host's
+  /// recipes changed, it is replaced by one showing the new list.
+  Future<void> _opened() async {
+    _open = true;
+    final before = _signature(state.recipesOf(host.id));
+    await state.refreshRecipes(host.id);
+    if (!mounted || !_open) return;
+    if (_signature(state.recipesOf(host.id)) == before) return;
+    _open = false;
+    // Close the menu (it completes with no value); never the page under it.
+    Navigator.of(context).popUntil((r) => r is! PopupRoute);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _reopen();
+    });
+  }
+
+  Future<void> _reopen() async {
+    final button = context.findRenderObject();
+    final overlay = Navigator.of(context).overlay?.context.findRenderObject();
+    if (button is! RenderBox || overlay is! RenderBox) return;
+    final position = RelativeRect.fromRect(
+      Rect.fromPoints(
+        button.localToGlobal(Offset.zero, ancestor: overlay),
+        button.localToGlobal(
+          button.size.bottomRight(Offset.zero),
+          ancestor: overlay,
+        ),
+      ),
+      Offset.zero & overlay.size,
+    );
+    final name = await showMenu<String>(
+      context: context,
+      position: position,
+      items: _items(context),
+    );
+    if (name != null && mounted) await _start(context, name);
+  }
+
+  static String _signature(List<Recipe> rs) => [
+    for (final r in rs) '${r.name}|${r.label}|${r.modelPresent}',
+  ].join('\n');
 
   Future<void> _start(BuildContext context, String name) async {
     final n = state.openTabsOn(host.id);
