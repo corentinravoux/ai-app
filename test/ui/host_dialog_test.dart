@@ -315,9 +315,9 @@ void main() {
     ]);
     expect(find.text('Pi · Home PC'), findsOneWidget);
     expect(state.profiles.where((p) => p.hostId == 'pc').map((p) => p.id), [
-      'pi-pc',
-      'opencode-pc',
-      'claude-pc',
+      'local-pi-pc',
+      'local-opencode-pc',
+      'local-claude-pc',
     ]);
   });
 
@@ -327,7 +327,7 @@ void main() {
     final state = await pump(tester, makeState([local, pc]));
     await tester.runAsync(() async {
       await state.openLocal(
-        state.profiles.firstWhere((p) => p.id == 'pi-local'),
+        state.profiles.firstWhere((p) => p.id == 'local-pi-local'),
         tmp.path,
       );
     });
