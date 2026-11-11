@@ -7,17 +7,22 @@ import 'platform_paths.dart';
 import 'profiles.dart';
 
 /// Pi, OpenCode and Claude Code for every model host, in that order.
+/// Ids start with `local-`: `<agent>-<host id>` alone collides with native
+/// and ALCF ids for hosts named "default", "alcf" or like a Claude account.
 List<Profile> localProfiles(List<ModelHost> hosts) => [
   for (final h in hosts)
     for (final k in kLocalAgents)
       Profile(
-        id: '${k.name}-${h.id}',
+        id: localProfileId(k, h.id),
         label: '${_short(k)} · ${h.label}',
         kind: k,
         backend: Backend.local,
         hostId: h.id,
       ),
 ];
+
+String localProfileId(AgentKind k, String hostId) =>
+    'local-${k.name}-$hostId';
 
 /// Removed from local tabs on top of [kStrippedEnvKeys] and every
 /// `ANTHROPIC_*`: switches that send Claude Code to a cloud provider, and

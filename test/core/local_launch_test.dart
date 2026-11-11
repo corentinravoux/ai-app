@@ -42,12 +42,12 @@ void main() {
   test('localProfiles builds three profiles per host with stable ids', () {
     final ps = localProfiles([local, pc]);
     expect(ps.map((p) => p.id), [
-      'pi-local',
-      'opencode-local',
-      'claude-local',
-      'pi-pc',
-      'opencode-pc',
-      'claude-pc',
+      'local-pi-local',
+      'local-opencode-local',
+      'local-claude-local',
+      'local-pi-pc',
+      'local-opencode-pc',
+      'local-claude-pc',
     ]);
     expect(ps.map((p) => p.label).take(3), [
       'Pi · This machine',
