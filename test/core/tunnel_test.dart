@@ -215,19 +215,28 @@ void main() {
     expect(r.sleeps, hasLength(1));
   });
 
-  test('a fresh ensure after a fatal error tries again', () async {
-    final r = Rig(probeUp: false);
-    final f = r.m.ensure(pc);
-    await r.pump();
-    r.procs.last.say('Permission denied (publickey).');
-    r.procs.last.exit(255);
-    await f;
-    r.probeUp = true;
-    await r.m.ensure(pc);
-    expect(r.starts, hasLength(2));
-    expect(r.m.stateOf('pc').phase, TunnelPhase.up);
-    expect(r.m.stateOf('pc').error, isNull);
-  });
+  test(
+    'polling does not retry a fatal error; an explicit retry does',
+    () async {
+      final r = Rig(probeUp: false);
+      final f = r.m.ensure(pc);
+      await r.pump();
+      r.procs.last.say('Permission denied (publickey).');
+      r.procs.last.exit(255);
+      await f;
+      r.probeUp = true;
+      // Polls call ensure() every few seconds: no new ssh login each time.
+      await r.m.ensure(pc);
+      await r.m.ensure(pc);
+      expect(r.starts, hasLength(1));
+      expect(r.m.stateOf('pc').error, 'SSH key not accepted by me@pc');
+      // Test / Save in the host dialog retry on purpose.
+      await r.m.ensure(pc, retry: true);
+      expect(r.starts, hasLength(2));
+      expect(r.m.stateOf('pc').phase, TunnelPhase.up);
+      expect(r.m.stateOf('pc').error, isNull);
+    },
+  );
 
   test('close kills the process and cancels the pending restart', () async {
     final r = Rig();

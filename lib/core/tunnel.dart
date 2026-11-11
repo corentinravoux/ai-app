@@ -148,8 +148,10 @@ class TunnelManager {
   }
 
   /// Makes sure [h]'s forward is up or coming up. Completes when it is up,
-  /// or when this attempt failed (see [stateOf] for why).
-  Future<void> ensure(ModelHost h) async {
+  /// or when this attempt failed (see [stateOf] for why). After a fatal
+  /// error (key refused, local port taken) only [retry] tries again, so
+  /// polling does not log in to the host every few seconds.
+  Future<void> ensure(ModelHost h, {bool retry = false}) async {
     final t = _tunnels.putIfAbsent(h.id, () => _Tunnel(h));
     t.host = h;
     t.closed = false;
@@ -159,7 +161,7 @@ class TunnelManager {
     }
     if (t.connecting != null) return t.connecting;
     if (t.phase == TunnelPhase.up || t.restarting) return;
-    // A fresh request after a fatal error (key fixed, port freed) retries.
+    if (t.fatal && !retry) return;
     t.fatal = false;
     t.attempt = 0;
     return _connect(t);

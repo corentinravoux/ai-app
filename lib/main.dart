@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
 
@@ -115,6 +116,14 @@ Future<void> main() async {
   sandbox.ensure().then((_) => state.refresh());
   state.startLoginChecks();
   state.startHostPolling();
+  // Close the ssh forwards when the window closes, or they outlive the app
+  // and hold their local ports.
+  AppLifecycleListener(
+    onExitRequested: () async {
+      await state.tunnels?.dispose();
+      return AppExitResponse.exit;
+    },
+  );
 }
 
 String _uvCacheDir(Map<String, String> env, String realHome) {

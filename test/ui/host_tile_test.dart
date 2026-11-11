@@ -86,6 +86,24 @@ const recipes = {
   'invalid': [],
 };
 
+/// An ssh forward whose local port is taken.
+class _PortTakenProc implements Proc {
+  final _exit = Completer<int>();
+  final _err = StreamController<String>.broadcast();
+  _PortTakenProc() {
+    Future<void>.delayed(Duration.zero, () {
+      _err.add('bind [127.0.0.1]:19931: Address already in use');
+      _exit.complete(255);
+    });
+  }
+  @override
+  Future<int> get exitCode => _exit.future;
+  @override
+  Stream<String> get stderrLines => _err.stream;
+  @override
+  void kill() {}
+}
+
 class _NeverProc implements Proc {
   @override
   Future<int> get exitCode => Completer<int>().future;
@@ -102,7 +120,10 @@ void main() {
   late List<LaunchSpec> started;
   late Map<String, dynamic> current;
 
-  AppState makeState({List<ModelHost> hosts = const [local, pc]}) {
+  AppState makeState({
+    List<ModelHost> hosts = const [local, pc],
+    TunnelManager? tunnels,
+  }) {
     runner = FakeRunner({
       'llm-host status': (_) => RunResult(0, jsonEncode(current), ''),
       'llm-host list': (_) => RunResult(0, jsonEncode(recipes), ''),
@@ -145,11 +166,13 @@ void main() {
         sshExe: '/usr/bin/ssh',
         controlDir: '/c',
       ),
-      tunnels: TunnelManager(
-        start: (_, _) async => _NeverProc(),
-        probe: (_) async => true,
-        sshExe: '/usr/bin/ssh',
-      ),
+      tunnels:
+          tunnels ??
+          TunnelManager(
+            start: (_, _) async => _NeverProc(),
+            probe: (_) async => true,
+            sshExe: '/usr/bin/ssh',
+          ),
       dataRoot: '$realHome/.local/share/ai-app',
       guardedRoots: [
         '$realHome/.claude',
@@ -406,6 +429,33 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+    'a forward that cannot open blocks the remote profiles and says why',
+    (tester) async {
+      final state = makeState(
+        tunnels: TunnelManager(
+          start: (_, _) async => _PortTakenProc(),
+          probe: (_) async => false,
+          sshExe: '/usr/bin/ssh',
+          probeEvery: Duration.zero,
+        ),
+      );
+      // The host answers over the control connection: only the forward fails.
+      runner.handlers['/usr/bin/ssh'] = (_) =>
+          RunResult(0, jsonEncode(status('ready')), '');
+      await pump(tester, state);
+      const why =
+          'The tunnel to PC is not open: port 19931 is already in use on this machine';
+      expect(find.text(why), findsNWidgets(3));
+      expect(button(tester, 'open-pi-pc').onPressed, isNull);
+      expect(
+        find.text('Tunnel: port 19931 is already in use on this machine'),
+        findsOneWidget,
+      );
+      expect(button(tester, 'open-pi-local').onPressed, isNotNull);
+    },
+  );
 
   testWidgets('existing ALCF and account sections are still there', (
     tester,

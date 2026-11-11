@@ -330,7 +330,17 @@ class AppState extends ChangeNotifier {
       // llm-host missing or answering garbage: say so, not "unreachable".
       return LocalBlocked(problem);
     }
-    return localReadiness(p.kind, h, s);
+    final r = localReadiness(p.kind, h, s);
+    // Status travels over ssh itself; the agents need the forward.
+    if (r is LocalReady && h.isRemote && tunnels != null) {
+      final t = tunnelOf(h.id);
+      if (t.phase != TunnelPhase.up) {
+        return LocalBlocked(
+          'The tunnel to ${h.label} is not open: ${t.error ?? 'connecting…'}',
+        );
+      }
+    }
+    return r;
   }
 
   int openTabsOn(String hostId) =>
@@ -492,6 +502,8 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     hostsSaving = registry?.save(hosts) ?? Future.value();
     await hostsSaving;
+    // A saved host (new key, freed port…) gets a fresh forward attempt.
+    if (h.isRemote) await tunnels?.ensure(h, retry: true);
     refreshHost(h.id);
   }
 
@@ -526,7 +538,7 @@ class AppState extends ChangeNotifier {
     if (client == null) return 'model hosts are not available';
     if (h.isRemote && !sshAvailable) return 'ssh is not installed';
     final saved = hostById(h.id) != null;
-    if (h.isRemote) await tunnels?.ensure(h);
+    if (h.isRemote) await tunnels?.ensure(h, retry: true);
     final r = await client.status(h);
     if (h.isRemote && !saved) await tunnels?.close(h.id);
     return switch (r) {
