@@ -25,7 +25,10 @@ TIMEOUT = 20
 MAX_REDIRECTS = 5
 USER_AGENT = "ai-app-webread/1"
 
-SKIP = {"script", "style", "nav", "svg", "noscript", "template", "head", "iframe"}
+SKIP = {"script", "style", "nav", "svg", "noscript", "template", "iframe"}
+# What may stand in <head>. </head> is optional in HTML: the head also ends
+# at <body> or at the first tag that cannot be in it.
+HEAD_TAGS = {"title", "base", "link", "meta", "style", "script", "noscript", "template"}
 BLOCK = {
     "p", "div", "section", "article", "main", "header", "footer", "aside",
     "h1", "h2", "h3", "h4", "h5", "h6", "li", "ul", "ol", "tr", "table",
@@ -43,10 +46,16 @@ class _Text(html.parser.HTMLParser):
         self.title = ""
         self.parts: list[str] = []
         self._skip = 0
+        self._in_head = False
         self._in_title = False
         self._pre = 0
 
     def handle_starttag(self, tag, attrs):
+        if tag == "head":
+            self._in_head = True
+            return
+        if self._in_head and tag not in HEAD_TAGS:
+            self._in_head = False
         if tag == "title":
             self._in_title = True
         if tag in SKIP:
@@ -61,6 +70,9 @@ class _Text(html.parser.HTMLParser):
             self.parts.append("\n")
 
     def handle_endtag(self, tag):
+        if tag == "head":
+            self._in_head = False
+            return
         if tag == "title":
             self._in_title = False
         if tag in SKIP and self._skip:
@@ -74,7 +86,7 @@ class _Text(html.parser.HTMLParser):
         if self._in_title:
             self.title += data
             return
-        if self._skip:
+        if self._skip or self._in_head:
             return
         self.parts.append(data if self._pre else re.sub(r"[ \t\r\f\v]+", " ", data))
 

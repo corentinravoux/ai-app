@@ -189,20 +189,22 @@ List<String> validateHost(ModelHost h, List<ModelHost> others) {
       final lp = h.localPort;
       if (lp == null || lp < 1024 || lp > 65535) {
         p.add('The local port must be between 1024 and 65535.');
-      } else {
-        final taken = {
-          for (final o in others)
-            if (o.kind == HostKind.ssh && o.localPort != null) o.localPort!,
-          for (final o in others)
-            if (o.kind == HostKind.local) o.serverPort,
-        };
-        if (taken.contains(lp)) {
-          p.add('Port $lp is already used by another host on this machine.');
-        }
       }
+  }
+  // Every host is reached on a 127.0.0.1 port of its own (the forward of an
+  // SSH host, the server of a local one): two hosts must not share it.
+  final ep = _endpointPort(h);
+  if (ep != null &&
+      ep >= 1 &&
+      ep <= 65535 &&
+      others.any((o) => _endpointPort(o) == ep)) {
+    p.add('Port $ep is already used by another host on this machine.');
   }
   return p;
 }
+
+int? _endpointPort(ModelHost h) =>
+    h.kind == HostKind.local ? h.serverPort : h.localPort;
 
 /// The first free forward port from 19931 up.
 int nextLocalPort(List<ModelHost> hosts) {

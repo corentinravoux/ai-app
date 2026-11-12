@@ -90,6 +90,7 @@ class TunnelManager {
     this.resetAfter = const Duration(seconds: 30),
     Future<void> Function(Duration)? sleep,
     DateTime Function()? now,
+    this.portInUse,
   }) : _delay =
            delay ??
            ((a) => Duration(
@@ -114,6 +115,11 @@ class TunnelManager {
 
   /// A forward up this long counts as healthy: the backoff starts over.
   final Duration resetAfter;
+
+  /// Run before ssh starts: a local port that already answers belongs to
+  /// another program, and probing it would mark the forward up while
+  /// agents talk to that program. Null: no check (tests with fake probes).
+  final PortProbe? portInUse;
 
   final _tunnels = <String, _Tunnel>{};
   final _changes = StreamController<String>.broadcast();
@@ -178,6 +184,15 @@ class TunnelManager {
     t.phase = TunnelPhase.connecting;
     t.error = null;
     _notify(t);
+    final inUse = portInUse;
+    if (inUse != null && await inUse(t.host.localPort!)) {
+      if (t.closed) return;
+      t.phase = TunnelPhase.down;
+      t.fatal = true;
+      t.error = 'port ${t.host.localPort} is already in use on this machine';
+      _notify(t);
+      return;
+    }
     final Proc p;
     try {
       p = await _start(sshExe, argsFor(t.host));
@@ -185,6 +200,13 @@ class TunnelManager {
       t.phase = TunnelPhase.down;
       t.error = 'cannot start ssh: $e';
       _notify(t);
+      return;
+    }
+    if (t.closed) {
+      // close() ran while ssh was starting and found nothing to kill: this
+      // forward must not outlive it.
+      p.kill();
+      await p.exitCode;
       return;
     }
     t.proc = p;

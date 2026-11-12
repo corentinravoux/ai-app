@@ -7,17 +7,22 @@ import 'platform_paths.dart';
 import 'profiles.dart';
 
 /// Pi, OpenCode and Claude Code for every model host, in that order.
+/// Ids start with `local-`: `<agent>-<host id>` alone collides with native
+/// and ALCF ids for hosts named "default", "alcf" or like a Claude account.
 List<Profile> localProfiles(List<ModelHost> hosts) => [
   for (final h in hosts)
     for (final k in kLocalAgents)
       Profile(
-        id: '${k.name}-${h.id}',
+        id: localProfileId(k, h.id),
         label: '${_short(k)} · ${h.label}',
         kind: k,
         backend: Backend.local,
         hostId: h.id,
       ),
 ];
+
+String localProfileId(AgentKind k, String hostId) =>
+    'local-${k.name}-$hostId';
 
 /// Removed from local tabs on top of [kStrippedEnvKeys] and every
 /// `ANTHROPIC_*`: switches that send Claude Code to a cloud provider, and
@@ -78,6 +83,14 @@ LocalReadiness localReadiness(AgentKind k, ModelHost h, HostStatus? s) {
       return LocalBlocked('The model failed to start on $l: open the log');
     case ServerState.ready:
       break;
+  }
+  // Agents are pointed at the saved port: a server on another one (llm-host
+  // installed with --port, the host saved with the default) is not reachable.
+  if (s.port != h.serverPort) {
+    return LocalBlocked(
+      'The model on $l serves on port ${s.port}, '
+      'but the host is set to ${h.serverPort}: edit the host',
+    );
   }
   final ctx = s.ctx;
   final alias = s.alias ?? s.recipe;
