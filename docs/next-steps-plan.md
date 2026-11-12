@@ -16,24 +16,15 @@ from there.
   analyzer clean, 256 Dart tests, the `llm-host` and `webread` suites pass;
   its Linux and Windows CI jobs are green.
 
-## A. Publish and CI
+## A. Publish and CI — done 2026-11-12
 
-1. **Merge PR #2** (`fix/copilot-review-pr1`). It is safe to merge (see
-   above). Side effect: local profile ids become `local-<agent>-<host>`, so
-   "reopen last session" misses local tabs saved before the merge, once.
-2. **Make the macOS CI job green.** Its step
-   "llm-host tests (no /proc on macOS)" fails on every run since the PR #1
-   merge (`d72aaaf`); the Linux job runs the same `ps` code path and passes,
-   so the cause is specific to macOS's `ps` or the macOS runner. GitHub
-   serves job logs only to a signed-in user:
-   - paste the `FAIL:` / `ERROR:` lines and their tracebacks from that step,
-     or install `gh` and run `gh auth login` so Claude can read the logs.
-   - Done: the three CI jobs are green on `main`.
-3. **Delete the stale remote branch**: `git push origin --delete local-hosts`
-   (Claude's attempt was refused by the permission system).
-4. **Node on PATH** on the PC: add
-   `export PATH="$HOME/opt/node/bin:$HOME/.npm-global/bin:$PATH"` to
-   `~/.bashrc`.
+- PR #2 merged; stale `local-hosts` branch deleted; Node on `PATH` in
+  `~/.bashrc`.
+- CI green on Linux, macOS and Windows. The macOS `llm-host` tests had
+  timed out (21 min) because Python's `HTTPServer` does a reverse DNS
+  lookup at bind time that stalls on macOS runners; the test fakes now
+  skip it. Failing tests are published as annotations (readable without a
+  GitHub login), and the actions no longer run on Node 20.
 
 ## B. Remote use from the laptop (first plan, Tasks 15 and 17)
 
