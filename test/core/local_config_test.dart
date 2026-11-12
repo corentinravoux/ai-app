@@ -205,6 +205,21 @@ void main() {
     expect(Directory('$home/.pi/local').existsSync(), isFalse);
   });
 
+  test('writeLocalConfig refuses a symlinked extensions dir into a guarded root', () async {
+    final dir = '$home/data/local/pc/pi';
+    Directory(dir).createSync(recursive: true);
+    Directory('$home/.pi/agent/extensions').createSync(recursive: true);
+    Link('$dir/extensions').createSync('$home/.pi/agent/extensions');
+    await expectLater(
+      writeLocalConfig(AgentKind.pi, t32, dir, guardedRoots: guarded),
+      throwsStateError,
+    );
+    expect(
+      File('$home/.pi/agent/extensions/web_read.ts').existsSync(),
+      isFalse,
+    );
+  });
+
   test('writeLocalConfig replaces a symlinked models.json without touching its target', () async {
     final dir = '$home/data/local/pc/pi';
     Directory(dir).createSync(recursive: true);

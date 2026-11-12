@@ -107,6 +107,7 @@ Future<void> main() async {
       start: startIoProc,
       probe: tcpProbe,
       sshExe: sshExe ?? 'ssh',
+      portInUse: tcpProbe,
     ),
     dataRoot: dataRoot,
     sshAvailable: sshExe != null,
@@ -126,7 +127,11 @@ Future<void> main() async {
 
   state.notice = recoveredNotice(registry);
   runApp(AiApp(state: state, onConfigure: showConfigureDialog));
-  sandbox.ensure().then((_) => state.refresh());
+  // The ALCF sandbox is not used on Windows, and its .globus symlink needs
+  // a privilege most accounts lack: skip it, but still load the profiles.
+  (os == HostOs.windows ? Future<void>.value() : sandbox.ensure()).then(
+    (_) => state.refresh(),
+  );
   state.startLoginChecks();
   state.startHostPolling();
   // Close the ssh forwards when the window closes, or they outlive the app

@@ -237,10 +237,10 @@ void main() {
         findsOneWidget,
       );
       for (final a in ['pi', 'opencode', 'claude']) {
-        expect(button(tester, 'open-$a-pc').onPressed, isNull, reason: a);
+        expect(button(tester, 'open-local-$a-pc').onPressed, isNull, reason: a);
       }
       expect(find.text('PC is unreachable'), findsNWidgets(3));
-      expect(button(tester, 'open-pi-local').onPressed, isNotNull);
+      expect(button(tester, 'open-local-pi-local').onPressed, isNotNull);
     },
   );
 
@@ -265,6 +265,47 @@ void main() {
     ]);
   });
 
+  testWidgets('the menu shows recipes added since the last refresh', (
+    tester,
+  ) async {
+    current = status('stopped');
+    final state = await pump(tester, makeState(hosts: const [local]));
+    // A recipe file was added on the host after the first list.
+    runner.handlers['llm-host list'] = (_) => RunResult(
+      0,
+      jsonEncode({
+        ...recipes,
+        'recipes': [
+          ...(recipes['recipes']! as List),
+          {
+            'name': 'new-128k',
+            'label': 'New · 128K',
+            'model': 'n.gguf',
+            'ctx': 131072,
+            'max_output': 4096,
+            'vision': false,
+            'notes': '',
+            'model_present': true,
+          },
+        ],
+      }),
+      '',
+    );
+    await tester.tap(find.byKey(const ValueKey('host-menu-local')));
+    await tester.pumpAndSettle();
+    expect(find.text('New · 128K'), findsOneWidget);
+    expect(find.text('Qwen3.6 35B-A3B · 32K'), findsOneWidget);
+    await tester.tap(find.text('New · 128K'));
+    await tester.pump();
+    await tester.runAsync(() => state.saving);
+    await tester.pumpAndSettle();
+    expect(runner.calls.where((c) => c.args.first == 'start').single.args, [
+      'start',
+      'new-128k',
+      '--json',
+    ]);
+  });
+
   testWidgets('recipe with a missing model file is disabled', (tester) async {
     current = status('stopped');
     await pump(tester, makeState(hosts: const [local]));
@@ -283,7 +324,7 @@ void main() {
   testWidgets('switching with open tabs asks first', (tester) async {
     final state = await pump(tester, makeState(hosts: const [local]));
     await tester.runAsync(() async {
-      final p = state.profiles.firstWhere((p) => p.id == 'pi-local');
+      final p = state.profiles.firstWhere((p) => p.id == 'local-pi-local');
       await state.openLocal(p, tmp.path);
       await state.openLocal(p, tmp.path);
     });
@@ -379,8 +420,8 @@ void main() {
         find.byTooltip('No model is running on This machine: start one'),
         findsWidgets,
       );
-      expect(button(tester, 'open-pi-local').onPressed, isNull);
-      final p = state.profiles.firstWhere((p) => p.id == 'pi-local');
+      expect(button(tester, 'open-local-pi-local').onPressed, isNull);
+      final p = state.profiles.firstWhere((p) => p.id == 'local-pi-local');
       String? err;
       await tester.runAsync(
         () async => err = await state.openLocal(p, tmp.path),
@@ -393,13 +434,13 @@ void main() {
   testWidgets('a ready profile opens a tab titled after it', (tester) async {
     final state = await pump(tester, makeState(hosts: const [local]));
     // The button opens the folder dialog for this profile.
-    await tester.tap(find.byKey(const ValueKey('open-pi-local')));
+    await tester.tap(find.byKey(const ValueKey('open-local-pi-local')));
     await tester.pumpAndSettle();
     expect(find.text('New Pi · This machine session'), findsOneWidget);
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     // Opening writes real files: run it outside the fake clock.
-    final p = state.profiles.firstWhere((p) => p.id == 'pi-local');
+    final p = state.profiles.firstWhere((p) => p.id == 'local-pi-local');
     String? err;
     await tester.runAsync(() async => err = await state.openLocal(p, tmp.path));
     await tester.pumpAndSettle();
@@ -420,9 +461,9 @@ void main() {
   ) async {
     current = status('ready', ctx: 24576, label: 'Small · 24K');
     await pump(tester, makeState(hosts: const [local]));
-    expect(button(tester, 'open-pi-local').onPressed, isNotNull);
-    expect(button(tester, 'open-opencode-local').onPressed, isNotNull);
-    expect(button(tester, 'open-claude-local').onPressed, isNull);
+    expect(button(tester, 'open-local-pi-local').onPressed, isNotNull);
+    expect(button(tester, 'open-local-opencode-local').onPressed, isNotNull);
+    expect(button(tester, 'open-local-claude-local').onPressed, isNull);
     expect(
       find.text(
         'Claude Code needs a 32768-token window; Small · 24K has 24576',
@@ -449,18 +490,18 @@ void main() {
       const why =
           'The tunnel to PC is not open: port 19931 is already in use on this machine';
       expect(find.text(why), findsNWidgets(3));
-      expect(button(tester, 'open-pi-pc').onPressed, isNull);
+      expect(button(tester, 'open-local-pi-pc').onPressed, isNull);
       expect(
         find.text('Tunnel: port 19931 is already in use on this machine'),
         findsOneWidget,
       );
-      expect(button(tester, 'open-pi-local').onPressed, isNotNull);
+      expect(button(tester, 'open-local-pi-local').onPressed, isNotNull);
     },
   );
 
   testWidgets('a local tab that cannot restart says why', (tester) async {
     final state = await pump(tester, makeState(hosts: const [local]));
-    final p = state.profiles.firstWhere((p) => p.id == 'pi-local');
+    final p = state.profiles.firstWhere((p) => p.id == 'local-pi-local');
     await tester.runAsync(() => state.openLocal(p, tmp.path));
     await tester.pump();
     current = status('stopped');
@@ -481,7 +522,7 @@ void main() {
   ) async {
     current = status('stopped');
     final store = AppStore('${tmp.path}/state.json');
-    store.lastTabs = [SavedTab('pi-local', tmp.path)];
+    store.lastTabs = [SavedTab('local-pi-local', tmp.path)];
     final state = makeState(hosts: const [local], store: store);
     await pump(tester, state);
     expect(state.canReopen, 1);
@@ -505,7 +546,7 @@ void main() {
     final state = await pump(tester, makeState(hosts: const [local]));
     // The data folder is a file: writing the config fails.
     File('$realHome/.local/share/ai-app').createSync(recursive: true);
-    final p = state.profiles.firstWhere((p) => p.id == 'pi-local');
+    final p = state.profiles.firstWhere((p) => p.id == 'local-pi-local');
     String? err;
     await tester.runAsync(() async => err = await state.openLocal(p, tmp.path));
     expect(err, startsWith('Could not write the agent config'));

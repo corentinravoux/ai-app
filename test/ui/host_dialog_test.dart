@@ -269,6 +269,12 @@ void main() {
     // and the button shows it (once the form has no problems)
     await openAdd(tester);
     await enter(tester, 'host-label', 'Mini');
+    // "This machine" already serves on 9931: a second local host needs its own
+    expect(
+      find.text('Port 9931 is already used by another host on this machine.'),
+      findsOneWidget,
+    );
+    await enter(tester, 'host-server-port', '9932');
     await tester.tap(find.byKey(const ValueKey('host-test')));
     await tester.pumpAndSettle();
     expect(find.text('ready: Q · 64K'), findsOneWidget);
@@ -315,9 +321,9 @@ void main() {
     ]);
     expect(find.text('Pi · Home PC'), findsOneWidget);
     expect(state.profiles.where((p) => p.hostId == 'pc').map((p) => p.id), [
-      'pi-pc',
-      'opencode-pc',
-      'claude-pc',
+      'local-pi-pc',
+      'local-opencode-pc',
+      'local-claude-pc',
     ]);
   });
 
@@ -327,7 +333,7 @@ void main() {
     final state = await pump(tester, makeState([local, pc]));
     await tester.runAsync(() async {
       await state.openLocal(
-        state.profiles.firstWhere((p) => p.id == 'pi-local'),
+        state.profiles.firstWhere((p) => p.id == 'local-pi-local'),
         tmp.path,
       );
     });
