@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'agents.dart';
 import 'claude_seed.dart';
-import 'claude_slots.dart';
+import 'claude_picker.dart';
 import 'guard.dart';
 import 'launch.dart';
 import 'runner.dart';
@@ -205,8 +205,7 @@ class AlcfCli {
     String cluster = 'minerva',
     bool experimental = false,
     bool includePlugins = false,
-    Map<ClaudeSlot, String>? claudeSlots,
-    Map<String, String> modelNames = const {},
+    List<String>? claudeModels,
   }) async {
     await sandbox.ensure();
     if (!await tokenOk()) return const LoginNeeded();
@@ -237,12 +236,11 @@ class AlcfCli {
     final touched = await guard.changedSince(before);
     if (touched.isNotEmpty) return RealConfigTouched(touched);
     if (r.exitCode != 0) return ConfigureFailed(explainError(r.stderr));
-    if (kind == AgentKind.claude && claudeSlots != null) {
-      await writeClaudeSlots(
+    if (kind == AgentKind.claude && claudeModels != null) {
+      await writeClaudePicker(
         '${sandbox.claudeDir}/settings.json',
-        claudeSlots,
-        cluster: cluster,
-        names: modelNames,
+        claudeModels,
+        main: model,
       );
     }
     if (kind == AgentKind.codex) {
