@@ -87,4 +87,15 @@ class H(http.server.BaseHTTPRequestHandler):
             self._json(404, {})
 
 
-http.server.HTTPServer(("127.0.0.1", port), H).serve_forever()
+class Server(http.server.HTTPServer):
+    def server_bind(self):
+        # HTTPServer.server_bind calls socket.getfqdn(), a reverse DNS lookup
+        # that stalls for seconds on macOS runners: the fake then answers so
+        # late that every test times out. The name is never used.
+        import socketserver
+
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = "127.0.0.1", self.server_address[1]
+
+
+Server(("127.0.0.1", port), H).serve_forever()

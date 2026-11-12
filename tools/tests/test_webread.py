@@ -49,10 +49,19 @@ class H(http.server.BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
+class _Server(http.server.ThreadingHTTPServer):
+    def server_bind(self):
+        # No socket.getfqdn() (slow reverse DNS on macOS runners).
+        import socketserver
+
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = "127.0.0.1", self.server_address[1]
+
+
 class WebreadTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+        cls.srv = _Server(("127.0.0.1", 0), H)
         cls.base = f"http://127.0.0.1:{cls.srv.server_address[1]}"
         threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
 
