@@ -67,7 +67,8 @@ one is available.
 
 - **Done 2026-11-13** ([local-agents-plan.md](local-agents-plan.md)): full Claude
   as a fourth local profile (64K window and up), a Qwen Code profile, and
-  Brave web search for the local agents (you create a Brave Search API key).
+  web search for the local agents (SearXNG, self-hosted: run
+  `scripts/install-searxng.sh` on the machine where AI App runs).
 - **Later**: everything else, listed in [ideas.md](ideas.md) (shorter tool
   output for Pi, mini-swe-agent, remote wake-up, other ways to connect,
   macOS/Windows, the two small known issues).

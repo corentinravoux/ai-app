@@ -236,12 +236,11 @@ the new model's settings. Working "offline" means working at the host
 itself: two machines need the internet to find each other unless they
 share a network.
 
-**Web search** uses the [Brave Search API](https://api-dashboard.search.brave.com)
-(a free plan exists). Put your key in `~/.config/ai-app/brave-api-key`
-(macOS: `~/Library/Application Support/ai-app/brave-api-key`; Windows:
-`%APPDATA%\ai-app\brave-api-key`) on the machine where the app runs, or set
-`BRAVE_API_KEY`. Without a key, `websearch` says where to put it; reading
-pages with `webread` needs no key.
+**Web search** uses [SearXNG](https://docs.searxng.org), a free search engine
+you run yourself with Docker or Podman: no account, no key. Run
+`./scripts/install-searxng.sh` once on the machine where the app runs; see
+[docs/searxng.md](docs/searxng.md). Without it, `websearch` says how to start
+it; reading pages with `webread` works anyway.
 
 **A caution.** Pi asks no permission before running commands, and a web
 page can contain instructions aimed at the model. Use a scratch copy of

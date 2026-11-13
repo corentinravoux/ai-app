@@ -59,7 +59,7 @@ export default function (pi: ExtensionAPI) {
     name: "web_search",
     label: "Search the web",
     description:
-      "Search the web (Brave Search). Returns numbered results with title, URL and a snippet; read one with web_read.",
+      "Search the web (SearXNG). Returns numbered results with title, URL and a snippet; read one with web_read.",
     parameters: Type.Object({
       query: Type.String({ description: "What to search for" }),
     }),

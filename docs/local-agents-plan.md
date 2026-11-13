@@ -75,3 +75,11 @@
   tab (scripts run by the agent do not see them); the Brave endpoint can be
   overridden by `AI_APP_BRAVE_ENDPOINT` (tests); the full-Claude source is
   `~/.claude`; `NO_PROXY` is set for Claude only.
+
+## Web search: Brave replaced by SearXNG (2026-11-13)
+
+Brave's API turned out to need a paid plan, so `websearch` now queries a
+self-hosted SearXNG (`scripts/install-searxng.sh`, `docs/searxng.md`) at
+`127.0.0.1:8899` by default (8888 is Jupyter's). The Brave key file,
+`BRAVE_API_KEY` and `AI_APP_BRAVE_ENDPOINT` are gone; Task 4's wiring into
+the agents is unchanged.
