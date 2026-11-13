@@ -26,25 +26,13 @@ from there.
   skip it. Failing tests are published as annotations (readable without a
   GitHub login), and the actions no longer run on Node 20.
 
-## B. Remote use from the laptop (first plan, Tasks 15 and 17)
+## B. Remote use from the laptop — done 2026-11-13
 
-1. On the PC, as root: `openssh-server` with password login off, and
-   Tailscale. On the laptop: Tailscale, an `ai_app` SSH key, and a `pc`
-   entry in `~/.ssh/config`. The commands are in [hosts.md](hosts.md)
-   § Network.
-2. On the laptop: pull `main`, `scripts/install-linux.sh`, re-run
-   `scripts/install-apparmor.sh` (the profile was renamed to `ai-app`), then
-   **Add host** → *Over SSH*, `pc` (llm-host command
-   `~/.local/bin/llm-host`), then **Test**.
-3. Drills, results into `docs/e2e-remote-<date>.md`:
-   - Wi-Fi off for 30 s during a Pi turn. Expected: the row turns
-     unreachable in about 15 s and comes back by itself.
-   - Stop the model under an open tab.
-   - Something else already listening on port 19931. Expected (after PR #2):
-     "port 19931 is already in use on this machine", no retry storm.
-   - The same work from a phone hotspot.
-   - Close an SSH session and check the model is still loaded (systemd
-     `KillUserProcesses`).
+Tailscale + SSH (key-only) between the work laptop and the home PC; AI App
+on the laptop starts, probes and uses the PC's model; the drills passed.
+Record: [e2e-remote-2026-11-13.md](e2e-remote-2026-11-13.md). Later, maybe:
+another way to connect than Tailscale (self-hosted WireGuard, Headscale,
+NetBird), and limiting SSH on the PC to the Tailscale interface with ufw.
 
 ## C. macOS and Windows on real machines
 
