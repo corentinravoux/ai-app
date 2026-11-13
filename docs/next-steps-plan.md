@@ -34,7 +34,7 @@ Record: [e2e-remote-2026-11-13.md](e2e-remote-2026-11-13.md). Later, maybe:
 another way to connect than Tailscale (self-hosted WireGuard, Headscale,
 NetBird), and limiting SSH on the PC to the Tailscale interface with ufw.
 
-## C. macOS and Windows on real machines
+## C. macOS and Windows on real machines — later (user, 2026-11-13)
 
 CI only compiles them. On a Mac, `scripts/install-macos.sh`; on Windows,
 `scripts\install-windows.ps1` in PowerShell. Things to check:
