@@ -222,18 +222,26 @@ beyond your SSH key.
 the server's live state every time a tab opens, so it always declares the
 window and output cap the server really has.
 
-| agent | configured with | reads the web with |
-|---|---|---|
-| Pi | `models.json` and `settings.json` (window, output cap, compaction) | a `web_read` tool |
-| OpenCode | `opencode.jsonc` (window, output cap, compaction, tool-output limits) | its own WebFetch |
-| Claude | environment only (`ANTHROPIC_BASE_URL` to the host), `--bare`, Bash/Read/Edit | `webread <url>` through Bash |
+| agent | configured with | needs a window of | web |
+|---|---|---|---|
+| Pi | `models.json` and `settings.json` (window, output cap, compaction) | 16K | `web_read` and `web_search` tools |
+| OpenCode | `opencode.jsonc` (window, output cap, compaction, tool-output limits) | 24K | its own WebFetch, plus `webread` / `websearch` |
+| Qwen Code | `settings.json` in its own home (window, output cap, compaction); folder trust on, so a project's `.qwen/settings.json` is ignored | 24K | `webread` / `websearch` |
+| Claude | environment only (`ANTHROPIC_BASE_URL` to the host), `--bare`, Bash/Read/Edit; about 1,200 tokens of prompt | 32K | `webread` / `websearch` through Bash |
+| Claude (full) | your `CLAUDE.md`, commands, skills and agents (linked from `~/.claude`), every tool; about 18,500 tokens of prompt | 64K | WebFetch, `webread` / `websearch` |
 
-Claude needs a window of at least 32K tokens, OpenCode 24K and Pi 16K; an
-agent below its minimum stays greyed with the reason. Switching the model
+An agent below its minimum window stays greyed with the reason. Switching the model
 while tabs use it keeps them running; click **Restart** on a tab to give it
 the new model's settings. Working "offline" means working at the host
 itself: two machines need the internet to find each other unless they
 share a network.
+
+**Web search** uses the [Brave Search API](https://api-dashboard.search.brave.com)
+(a free plan exists). Put your key in `~/.config/ai-app/brave-api-key`
+(macOS: `~/Library/Application Support/ai-app/brave-api-key`; Windows:
+`%APPDATA%\ai-app\brave-api-key`) on the machine where the app runs, or set
+`BRAVE_API_KEY`. Without a key, `websearch` says where to put it; reading
+pages with `webread` needs no key.
 
 **A caution.** Pi asks no permission before running commands, and a web
 page can contain instructions aimed at the model. Use a scratch copy of
