@@ -12,8 +12,10 @@ your laptop, and the PC too if you use AI App on the PC.
 
 ## Install (Linux, macOS)
 
-Needs Docker or Podman. On Ubuntu: `sudo apt install docker.io`, then
-`sudo usermod -aG docker $USER` and log out and back in.
+Needs Podman or Docker. Podman is simpler on Ubuntu: `sudo apt install
+podman` (rootless, nothing else to set up). With Docker:
+`sudo apt install docker.io`, then `sudo usermod -aG docker $USER`, then log
+out and back in.
 
 ```bash
 cd ai-app

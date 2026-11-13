@@ -52,9 +52,18 @@ YAML
   echo "wrote $cfg/settings.yml"
 fi
 
+# Docker restarts "unless-stopped" containers itself. Rootless Podman has
+# no daemon: its user service podman-restart starts "always" containers
+# at login.
+policy=unless-stopped
+if [[ "$(basename "$engine")" == podman ]]; then
+  policy=always
+  systemctl --user enable podman-restart.service >/dev/null 2>&1 || true
+fi
+
 "$engine" pull "$image"
 "$engine" rm -f "$name" >/dev/null 2>&1 || true
-"$engine" run -d --name "$name" --restart unless-stopped \
+"$engine" run -d --name "$name" --restart "$policy" \
   -p "127.0.0.1:$port:8080" \
   -v "$cfg:/etc/searxng" \
   "$image" >/dev/null

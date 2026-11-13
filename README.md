@@ -237,7 +237,7 @@ itself: two machines need the internet to find each other unless they
 share a network.
 
 **Web search** uses [SearXNG](https://docs.searxng.org), a free search engine
-you run yourself with Docker or Podman: no account, no key. Run
+you run yourself with Podman or Docker: no account, no key. Run
 `./scripts/install-searxng.sh` once on the machine where the app runs; see
 [docs/searxng.md](docs/searxng.md). Without it, `websearch` says how to start
 it; reading pages with `webread` works anyway.
