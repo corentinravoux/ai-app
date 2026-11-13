@@ -146,6 +146,7 @@ Future<LaunchSpec> buildLocalLaunch(
     guardedRoots: guardedRoots,
     claudeSourceDir: claudeSourceDir,
   );
+  if (a == LocalAgent.qwen) await writeQwenTrust(dir, cwd);
   final full = a == LocalAgent.claudeFull;
   final env = {
     for (final e in parentEnv.entries)

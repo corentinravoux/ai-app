@@ -131,9 +131,13 @@ void main() {
         );
         expect(readJson('$dir/settings.json'), {'apiKeyHelper': 'echo local'});
         expect(readJson('$dir/.claude.json')['hasCompletedOnboarding'], isTrue);
+        // Copies, not links: /memory or /agents in the tab must not reach
+        // the user's own ~/.claude.
         for (final n in ['CLAUDE.md', 'commands', 'skills']) {
-          expect(Link('$dir/$n').targetSync(), '$home/.claude/$n', reason: n);
+          expect(FileSystemEntity.isLinkSync('$dir/$n'), isFalse, reason: n);
         }
+        expect(File('$dir/CLAUDE.md').readAsStringSync(), '# mine');
+        expect(Directory('$dir/skills/s1').existsSync(), isTrue);
         expect(
           FileSystemEntity.typeSync('$dir/agents', followLinks: false),
           FileSystemEntityType.notFound,
@@ -218,6 +222,100 @@ void main() {
         expect(isLocalStripped('HOME'), isFalse);
       },
     );
+
+    test(
+      'full Claude: edits in the tab stay in the copy, and copies refresh',
+      () async {
+        final dir = localDir('$home/data', 'pc', LocalAgent.claudeFull);
+        Future<void> write() => writeLocalConfig(
+          LocalAgent.claudeFull,
+          t64,
+          dir,
+          guardedRoots: guarded,
+          claudeSourceDir: '$home/.claude',
+        );
+        await write();
+        File('$dir/CLAUDE.md').writeAsStringSync('# edited in the tab');
+        File('$dir/skills/new.md').writeAsStringSync('x');
+        expect(File('$home/.claude/CLAUDE.md').readAsStringSync(), '# mine');
+        expect(File('$home/.claude/skills/new.md').existsSync(), isFalse);
+        File('$home/.claude/CLAUDE.md').writeAsStringSync('# mine v2');
+        Directory('$home/.claude/commands').deleteSync();
+        await write();
+        expect(File('$dir/CLAUDE.md').readAsStringSync(), '# mine v2');
+        expect(File('$dir/skills/new.md').existsSync(), isFalse);
+        expect(
+          FileSystemEntity.typeSync('$dir/commands', followLinks: false),
+          FileSystemEntityType.notFound,
+        );
+      },
+    );
+
+    test(
+      'full Claude: links planted in its folder are replaced, never followed',
+      () async {
+        final dir = localDir('$home/data', 'pc', LocalAgent.claudeFull);
+        Directory(dir).createSync(recursive: true);
+        File('$home/real-settings.json').writeAsStringSync('{"keep": 1}');
+        File('$home/real-state.json')
+            .writeAsStringSync('{"hasCompletedOnboarding": true}');
+        Link('$dir/settings.json').createSync('$home/real-settings.json');
+        Link('$dir/.claude.json').createSync('$home/real-state.json');
+        Link('$dir/skills').createSync('$home/.claude/skills');
+        await writeLocalConfig(
+          LocalAgent.claudeFull,
+          t64,
+          dir,
+          guardedRoots: guarded,
+          claudeSourceDir: '$home/.claude',
+        );
+        for (final n in ['settings.json', '.claude.json', 'skills']) {
+          expect(FileSystemEntity.isLinkSync('$dir/$n'), isFalse, reason: n);
+        }
+        expect(
+          File('$home/real-settings.json').readAsStringSync(),
+          '{"keep": 1}',
+        );
+        expect(
+          File('$home/real-state.json').readAsStringSync(),
+          '{"hasCompletedOnboarding": true}',
+        );
+        expect(Directory('$home/.claude/skills/s1').existsSync(), isTrue);
+      },
+    );
+
+    test('Qwen Code launch: no inherited OpenAI/Qwen routing, tab folder untrusted', () async {
+      final p = localProfiles([pc])
+          .firstWhere((p) => p.localAgent == LocalAgent.qwen);
+      final spec = await buildLocalLaunch(
+        p,
+        host: pc,
+        target: t64,
+        dataRoot: '$home/data',
+        parentEnv: {
+          'PATH': '/bin',
+          'HOME': home,
+          'OPENAI_API_KEY': 'sk-real',
+          'OPENAI_BASE_URL': 'https://api.openai.com/v1',
+          'QWEN_HOME': '$home/.qwen',
+          'GEMINI_API_KEY': 'g',
+        },
+        exePath: '/bin/qwen',
+        cwd: '$home/project',
+        toolsBinDir: '$home/data/bin',
+        guardedRoots: guarded,
+      );
+      final dir = '$home/data/local/pc/qwen';
+      expect(spec.env['QWEN_HOME'], dir);
+      for (final k in ['OPENAI_API_KEY', 'OPENAI_BASE_URL', 'GEMINI_API_KEY']) {
+        expect(spec.env.containsKey(k), isFalse, reason: k);
+      }
+      // Marked untrusted ahead of time: no trust prompt, and a project's
+      // .qwen/settings.json stays ignored.
+      expect(readJson('$dir/trustedFolders.json'), {
+        '$home/project': 'DO_NOT_TRUST',
+      });
+    });
 
     test('writing a Qwen config under ~/.qwen is refused', () async {
       await expectLater(

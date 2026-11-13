@@ -228,7 +228,7 @@ window and output cap the server really has.
 | OpenCode | `opencode.jsonc` (window, output cap, compaction, tool-output limits) | 24K | its own WebFetch, plus `webread` / `websearch` |
 | Qwen Code | `settings.json` in its own home (window, output cap, compaction); folder trust on, so a project's `.qwen/settings.json` is ignored | 24K | `webread` / `websearch` |
 | Claude | environment only (`ANTHROPIC_BASE_URL` to the host), `--bare`, Bash/Read/Edit; about 1,200 tokens of prompt | 32K | `webread` / `websearch` through Bash |
-| Claude (full) | your `CLAUDE.md`, commands, skills and agents (linked from `~/.claude`), every tool; about 18,500 tokens of prompt | 64K | WebFetch, `webread` / `websearch` |
+| Claude (full) | your `CLAUDE.md`, commands, skills and agents (copied from `~/.claude` at every tab open, so nothing the tab does reaches `~/.claude`), every tool; about 18,500 tokens of prompt | 64K | WebFetch, `webread` / `websearch` |
 
 An agent below its minimum window stays greyed with the reason. Switching the model
 while tabs use it keeps them running; click **Restart** on a tab to give it

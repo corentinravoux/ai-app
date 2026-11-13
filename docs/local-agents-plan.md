@@ -58,3 +58,20 @@
 
 ### Task 5: Close
 - README (model hosts table, web search key), next-steps § D updated, ideas linked; review; merge; push; reinstall.
+
+## Review outcome (2026-11-13)
+
+- Full Claude copies `CLAUDE.md`, commands, skills and agents at every tab
+  open instead of linking them: through links, `/memory` and `/agents` in
+  the tab wrote into the user's real `~/.claude` (and Windows needs a
+  privilege to create links). Links planted in its folder are dropped,
+  never followed.
+- Qwen Code: the tab's folder is written as `DO_NOT_TRUST` in the private
+  trusted-folders file at each launch, so no trust prompt can make a
+  project's `.qwen/settings.json` apply.
+- websearch: a query may start with `-` (`-site:x`), argument errors are
+  one line, HTTP 422 no longer blames the key alone.
+- Accepted: `OPENAI_*`, `QWEN_*`, `GEMINI_*` are dropped from every local
+  tab (scripts run by the agent do not see them); the Brave endpoint can be
+  overridden by `AI_APP_BRAVE_ENDPOINT` (tests); the full-Claude source is
+  `~/.claude`; `NO_PROXY` is set for Claude only.

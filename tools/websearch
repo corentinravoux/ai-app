@@ -78,8 +78,11 @@ def search(query: str, count: int) -> list[dict]:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
             data = json.loads(r.read(4 * 1024 * 1024))
     except urllib.error.HTTPError as e:
-        if e.code in (401, 403, 422):
+        if e.code in (401, 403):
             raise Fail(f"Brave refused the API key (HTTP {e.code}): check {key_file()}")
+        if e.code == 422:
+            raise Fail("Brave refused the request (HTTP 422): the query may be too long, "
+                       f"or the key in {key_file()} is invalid")
         if e.code == 429:
             raise Fail("Brave rate limit or monthly quota reached (HTTP 429): wait, or check your plan")
         raise Fail(f"Brave answered HTTP {e.code}")
@@ -92,12 +95,32 @@ def search(query: str, count: int) -> list[dict]:
     return ((data.get("web") or {}).get("results")) or []
 
 
+class _Args(argparse.ArgumentParser):
+    def error(self, message):  # one line, for the agent
+        print(f"websearch: {message}", file=sys.stderr)
+        sys.exit(2)
+
+
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="websearch", description="Search the web (Brave).")
-    ap.add_argument("query", nargs="*")
+    ap = _Args(prog="websearch", description="Search the web (Brave).")
     ap.add_argument("--count", type=int, default=5)
-    a = ap.parse_args(argv)
-    query = " ".join(a.query).strip()
+    # Only --count is an option; every other word, "-site:x" included,
+    # is the query, in the order typed.
+    argv = list(sys.argv[1:] if argv is None else argv)
+    opts, words, i = [], [], 0
+    while i < len(argv):
+        w = argv[i]
+        if w == "--count" and i + 1 < len(argv):
+            opts += argv[i:i + 2]
+            i += 2
+            continue
+        if w.startswith("--count=") or w in ("-h", "--help"):
+            opts.append(w)
+        elif w != "--":
+            words.append(w)
+        i += 1
+    a = ap.parse_args(opts)
+    query = " ".join(words).strip()
     if not query:
         print("websearch: give a query, e.g. websearch flutter pty windows", file=sys.stderr)
         return 2

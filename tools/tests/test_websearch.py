@@ -35,6 +35,10 @@ class Brave(http.server.BaseHTTPRequestHandler):
         Brave.seen.append((u.path, q, self.headers.get("X-Subscription-Token")))
         if u.path.startswith("/401"):
             return self._send(401, {"error": {"code": "SUBSCRIPTION_TOKEN_INVALID"}})
+        if u.path.startswith("/422"):
+            return self._send(422, {"error": {"code": "VALIDATION"}})
+        if u.path.startswith("/empty"):
+            return self._send(200, {"web": {"results": []}})
         if u.path.startswith("/429"):
             return self._send(429, {"error": {"code": "RATE_LIMITED"}})
         n = int(q.get("count", ["10"])[0])
@@ -126,6 +130,32 @@ class WebsearchTests(unittest.TestCase):
     def test_no_results(self):
         r = self.run_ws("x", "--count", "0")
         self.assertEqual(Brave.seen[-1][1]["count"], ["1"])
+
+    def test_a_query_starting_with_a_dash_is_a_query(self):
+        r = self.run_ws("-site:example.org", "flutter")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(Brave.seen[-1][1]["q"], ["-site:example.org flutter"])
+
+    def test_422_does_not_blame_the_key_alone(self):
+        r = self.run_ws("x", path="/422")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("too long", r.stderr)
+
+    def test_no_results_says_so(self):
+        r = self.run_ws("x", path="/empty")
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("No results", r.stdout)
+
+    def test_unreachable_api_is_one_line(self):
+        r = self.run_ws("x", env={"AI_APP_BRAVE_ENDPOINT": "http://127.0.0.1:9/none"})
+        self.assertEqual(r.returncode, 2)
+        self.assertEqual(len(r.stderr.strip().splitlines()), 1)
+        self.assertNotIn(KEY, r.stderr)
+
+    def test_bad_option_value_is_one_line(self):
+        r = self.run_ws("x", "--count", "many")
+        self.assertEqual(r.returncode, 2)
+        self.assertEqual(len(r.stderr.strip().splitlines()), 1)
 
     def test_empty_query_is_refused(self):
         r = self.run_ws()

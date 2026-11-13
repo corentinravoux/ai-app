@@ -200,7 +200,10 @@ Map<String, String> overrideEnv(LocalAgent a, String dir) => switch (a) {
   LocalAgent.claude || LocalAgent.claudeFull => {'CLAUDE_CONFIG_DIR': dir},
 };
 
-/// What full Claude shares from the user's own Claude folder, as links.
+/// What full Claude shares from the user's own Claude folder. They are
+/// copied, not linked, at every tab open: Claude Code writes into its own
+/// folder (`/memory`, `/agents`), and a link would carry that into the
+/// user's real `~/.claude`.
 const kClaudeSharedItems = ['CLAUDE.md', 'commands', 'skills', 'agents'];
 
 /// Writes agent [a]'s config for [t] into [dir]. Refuses (StateError,
@@ -255,7 +258,11 @@ Future<void> writeLocalConfig(
         ...await _readJsonOrEmpty('$dir/settings.json'),
         'apiKeyHelper': 'echo local',
       });
-      // Skip Claude Code's first-run screens in this fresh folder.
+      // Skip Claude Code's first-run screens in this fresh folder. A link
+      // planted here is dropped first, so nothing is written through it.
+      if (FileSystemEntity.isLinkSync('$dir/.claude.json')) {
+        await Link('$dir/.claude.json').delete();
+      }
       final state = await _readJsonOrEmpty('$dir/.claude.json');
       if (state['hasCompletedOnboarding'] != true) {
         await _writeJson('$dir/.claude.json', {
@@ -266,13 +273,21 @@ Future<void> writeLocalConfig(
       final src = claudeSourceDir;
       if (src != null) {
         for (final n in kClaudeSharedItems) {
-          await _linkShared('$src/$n', '$dir/$n');
+          await _copyShared('$src/$n', '$dir/$n');
         }
       }
   }
 }
 
+/// Marks [cwd] as not trusted for Qwen Code: no trust prompt, and the
+/// project's own `.qwen/settings.json` stays ignored.
+Future<void> writeQwenTrust(String dir, String cwd) =>
+    _writeJson('$dir/trustedFolders.json', {cwd: 'DO_NOT_TRUST'});
+
+/// [path]'s JSON object; {} when missing, corrupt, or a link (never read
+/// through a link someone planted in the app's folder).
 Future<Map<String, dynamic>> _readJsonOrEmpty(String path) async {
+  if (FileSystemEntity.isLinkSync(path)) return {};
   try {
     final v = jsonDecode(await File(path).readAsString());
     if (v is Map) return Map<String, dynamic>.from(v);
@@ -282,22 +297,44 @@ Future<Map<String, dynamic>> _readJsonOrEmpty(String path) async {
   return {};
 }
 
-/// Points [link] at [source] when [source] exists. A link is only ever
-/// created or re-pointed, never written through; a real file or folder
-/// the user put at [link] is left alone.
-Future<void> _linkShared(String source, String link) async {
-  final type = FileSystemEntity.typeSync(link, followLinks: false);
-  if (FileSystemEntity.typeSync(source) == FileSystemEntityType.notFound) {
-    if (type == FileSystemEntityType.link) await Link(link).delete();
-    return;
+/// Replaces [dest] (in the app's own folder) by a fresh copy of [source],
+/// links in [source] followed. A link at [dest] is removed, never followed;
+/// a missing [source] leaves no copy.
+Future<void> _copyShared(String source, String dest) async {
+  switch (FileSystemEntity.typeSync(dest, followLinks: false)) {
+    case FileSystemEntityType.link:
+      await Link(dest).delete();
+    case FileSystemEntityType.directory:
+      await Directory(dest).delete(recursive: true);
+    case FileSystemEntityType.notFound:
+      break;
+    default:
+      await File(dest).delete();
   }
-  if (type == FileSystemEntityType.link) {
-    if (await Link(link).target() == source) return;
-    await Link(link).delete();
-  } else if (type != FileSystemEntityType.notFound) {
-    return;
+  switch (FileSystemEntity.typeSync(source)) {
+    case FileSystemEntityType.file:
+      await File(source).copy(dest);
+    case FileSystemEntityType.directory:
+      await _copyDir(source, dest, 0);
+    default:
+      break;
   }
-  await Link(link).create(source);
+}
+
+Future<void> _copyDir(String src, String dst, int depth) async {
+  if (depth > 16) return; // a link loop in the source
+  await Directory(dst).create();
+  await for (final e in Directory(src).list(followLinks: false)) {
+    final to = '$dst/${p.basename(e.path)}';
+    switch (FileSystemEntity.typeSync(e.path)) {
+      case FileSystemEntityType.directory:
+        await _copyDir(e.path, to, depth + 1);
+      case FileSystemEntityType.file:
+        await File(e.path).copy(to);
+      default:
+        break; // broken link, socket…
+    }
+  }
 }
 
 void _refuseGuarded(String dir, List<String> roots) {
