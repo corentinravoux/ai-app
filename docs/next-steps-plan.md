@@ -63,26 +63,11 @@ command line, quote with MSVCRT rules, run `.cmd`/`.bat` through
 `MultiByteToWideChar(CP_UTF8)`. Needs a Windows machine to test; say when
 one is available.
 
-## D. Decisions and features waiting for you
+## D. Features (decided 2026-11-13)
 
-1. **Full Claude on local hosts.** Your `CLAUDE.md`, commands and skills,
-   with all of Claude Code's tools. Measured at 18,503 tokens on the first
-   turn, so it fits the 64K recipe ([local-wire-notes.md](local-wire-notes.md)).
-   - Decide whether you want it, and whether per host or per tab.
-   - It needs an interactive check: first-run screens and the API-key
-     prompt in a fresh config folder (full mode uses `apiKeyHelper`).
-2. **Qwen Code and mini-swe-agent profiles.** Each needs a by-hand session
-   to confirm how its config folder can be redirected.
-3. **Shorter old tool output for Pi.** The Lewis policy, as a Pi extension.
-   Research first: measure on your own tasks with and without it.
-4. **Web search** for local agents. It needs a search provider: a key, or a
-   self-hosted SearXNG.
-5. **Remote wake-up** of a host. It needs an always-on device at home.
-
-## E. Known small issues, accepted for now
-
-- While a bad entry stays in `hosts.json`, every launch makes another
-  `hosts.json.dropped-*` copy and repeats the notice (fix the file to stop
-  it).
-- On Windows, `webread.cmd` still cuts a URL at an unquoted `&` or `)` when
-  a shell other than Pi calls it (cmd.exe expands `%*` before parsing).
+- **In progress** ([local-agents-plan.md](local-agents-plan.md)): full Claude
+  as a fourth local profile (64K window and up), a Qwen Code profile, and
+  Brave web search for the local agents (you create a Brave Search API key).
+- **Later**: everything else, listed in [ideas.md](ideas.md) (shorter tool
+  output for Pi, mini-swe-agent, remote wake-up, other ways to connect,
+  macOS/Windows, the two small known issues).
