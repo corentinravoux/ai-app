@@ -41,6 +41,7 @@ mv "$dest.new" "$dest"
 # webread: the page reader local agents use (first on their PATH).
 mkdir -p "$data/ai-app/bin"
 install -m 755 "$here/tools/webread" "$data/ai-app/bin/webread"
+install -m 755 "$here/tools/websearch" "$data/ai-app/bin/websearch"
 
 cp "$here/assets/icon/ai-app.png" "$hicolor/512x512/apps/$app_id.png"
 cp "$here/assets/icon/ai-app.svg" "$hicolor/scalable/apps/$app_id.svg"

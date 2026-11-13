@@ -175,8 +175,11 @@ List<String> claudeLocalArgs({bool full = false}) => [
   kWebToolsPrompt,
 ];
 
-/// Tells Claude how to reach the web from a local tab.
-const kWebToolsPrompt = 'To read a web page, run: webread <url>';
+/// Tells an agent how to reach the web from a local tab (Claude through
+/// its system prompt, Qwen Code and OpenCode through an instructions file).
+const kWebToolsPrompt =
+    'To read a web page, run: webread <url>\n'
+    'To search the web, run: websearch <query>';
 
 Map<String, String> overrideEnv(LocalAgent a, String dir) => switch (a) {
   LocalAgent.pi => {'PI_CODING_AGENT_DIR': dir},
@@ -233,8 +236,14 @@ Future<void> writeLocalConfig(
       _refuseGuarded(ext, guardedRoots);
       await _writeText('$ext/web_read.ts', kPiWebReadExtension);
     case LocalAgent.opencode:
-      await _writeJson('$dir/opencode.jsonc', opencodeConfig(t));
+      await _writeText('$dir/AGENTS.md', kWebToolsPrompt);
+      await _writeJson('$dir/opencode.jsonc', {
+        ...opencodeConfig(t),
+        'instructions': ['$dir/AGENTS.md'],
+      });
     case LocalAgent.qwen:
+      // QWEN.md in QWEN_HOME is Qwen Code's global instructions file.
+      await _writeText('$dir/QWEN.md', kWebToolsPrompt);
       await _writeJson('$dir/settings.json', {
         ...await _readJsonOrEmpty('$dir/settings.json'),
         ...qwenSettings(t),

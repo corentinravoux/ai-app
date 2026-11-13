@@ -29,6 +29,7 @@ mkdir -p "$dest" "$data/bin"
 rm -rf "$dest/AI App.app"
 cp -R "$app_src" "$dest/"
 install -m 755 "$here/tools/webread" "$data/bin/webread"
+install -m 755 "$here/tools/websearch" "$data/bin/websearch"
 
 echo "Installed $dest/AI App.app. Open it from Finder or Launchpad."
 echo "The first launch of an unsigned build may need: right-click → Open."

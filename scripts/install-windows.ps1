@@ -31,6 +31,8 @@ Copy-Item -Recurse $src $dest
 New-Item -ItemType Directory -Force $bin | Out-Null
 Copy-Item (Join-Path $here 'tools\webread') $bin -Force
 Copy-Item (Join-Path $here 'tools\webread.cmd') $bin -Force
+Copy-Item (Join-Path $here 'tools\websearch') $bin -Force
+Copy-Item (Join-Path $here 'tools\websearch.cmd') $bin -Force
 
 $menu = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'
 $shell = New-Object -ComObject WScript.Shell

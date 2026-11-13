@@ -231,4 +231,45 @@ void main() {
       );
     });
   });
+
+  group('web tools reach every local agent', () {
+    late Directory tmp;
+    setUp(() => tmp = Directory.systemTemp.createTempSync('aiapp_web_'));
+    tearDown(() => tmp.deleteSync(recursive: true));
+
+    test('Claude is told about webread and websearch', () {
+      expect(kWebToolsPrompt, contains('webread <url>'));
+      expect(kWebToolsPrompt, contains('websearch <query>'));
+      for (final full in [false, true]) {
+        expect(claudeLocalArgs(full: full).last, kWebToolsPrompt);
+      }
+    });
+
+    test('Pi gets a web_search tool', () async {
+      final dir = '${tmp.path}/pi';
+      await writeLocalConfig(LocalAgent.pi, t64, dir, guardedRoots: const []);
+      final ext = File('$dir/extensions/web_read.ts').readAsStringSync();
+      expect(ext, contains('name: "web_search"'));
+      expect(ext, contains('"websearch"'));
+    });
+
+    test('Qwen Code reads the web lines from QWEN.md in its home', () async {
+      final dir = '${tmp.path}/qwen';
+      await writeLocalConfig(LocalAgent.qwen, t64, dir, guardedRoots: const []);
+      expect(File('$dir/QWEN.md').readAsStringSync(), kWebToolsPrompt);
+    });
+
+    test('OpenCode reads them from an instructions file', () async {
+      final dir = '${tmp.path}/oc';
+      await writeLocalConfig(
+        LocalAgent.opencode,
+        t64,
+        dir,
+        guardedRoots: const [],
+      );
+      final c = readJson('$dir/opencode.jsonc');
+      expect(c['instructions'], ['$dir/AGENTS.md']);
+      expect(File('$dir/AGENTS.md').readAsStringSync(), kWebToolsPrompt);
+    });
+  });
 }

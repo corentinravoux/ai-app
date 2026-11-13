@@ -275,12 +275,13 @@ void main() {
     final ext = File('$dir/extensions/web_read.ts').readAsStringSync();
     expect(ext, contains('pi.registerTool'));
     expect(ext, contains('name: "web_read"'));
-    expect(ext, contains('pi.exec("webread", [params.url]'));
+    expect(ext, contains('run(pi, "webread", [params.url], signal)'));
+    expect(ext, contains('pi.exec(name, args, opts)'));
     // Windows: no cmd.exe (it would split a URL at &); the script is found
     // on PATH and run by py -3 (else python), the URL as its own argument.
     expect(ext, isNot(contains('"cmd"')));
-    expect(ext, contains('["-3", script, params.url]'));
-    expect(ext, contains('[script, params.url]'));
+    expect(ext, contains('["-3", script, ...args]'));
+    expect(ext, contains('[script, ...args]'));
     // Fall back to python only when py itself is missing, never because
     // webread failed (a 404 would otherwise be fetched twice).
     expect(ext, contains('/^spawn py ENOENT/'));
@@ -306,7 +307,7 @@ void main() {
       '--tools',
       'Bash,Read,Edit',
       '--append-system-prompt',
-      'To read a web page, run: webread <url>',
+      kWebToolsPrompt,
     ]);
   });
 

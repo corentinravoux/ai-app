@@ -1,0 +1,124 @@
+#!/usr/bin/env python3
+"""websearch: search the web with the Brave Search API, for a local agent.
+
+    websearch QUERY... [--count N]      (default 5, at most 20)
+
+Prints numbered results: title, URL, snippet. Read a result with webread.
+
+The API key comes from BRAVE_API_KEY, else from the file `brave-api-key` in
+AI App's settings folder:
+    Linux    ~/.config/ai-app/brave-api-key   ($XDG_CONFIG_HOME if set)
+    macOS    ~/Library/Application Support/ai-app/brave-api-key
+    Windows  %APPDATA%\\ai-app\\brave-api-key
+Get a key at https://api-dashboard.search.brave.com (free plan available).
+Failures print one line on stderr and exit 2; the key is never printed.
+Standard library only.
+"""
+
+from __future__ import annotations
+
+import argparse
+import html
+import json
+import os
+import pathlib
+import re
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+
+ENDPOINT = "https://api.search.brave.com/res/v1/web/search"
+TIMEOUT = 20
+USER_AGENT = "ai-app-websearch/1"
+
+
+class Fail(Exception):
+    pass
+
+
+def key_file() -> pathlib.Path:
+    home = pathlib.Path(os.environ.get("HOME") or pathlib.Path.home())
+    if sys.platform == "win32":
+        base = pathlib.Path(os.environ.get("APPDATA") or home / "AppData" / "Roaming")
+    elif sys.platform == "darwin":
+        base = home / "Library" / "Application Support"
+    else:
+        base = pathlib.Path(os.environ.get("XDG_CONFIG_HOME") or home / ".config")
+    return base / "ai-app" / "brave-api-key"
+
+
+def api_key() -> str:
+    k = os.environ.get("BRAVE_API_KEY", "").strip()
+    if k:
+        return k
+    f = key_file()
+    try:
+        k = f.read_text().strip()
+    except OSError:
+        k = ""
+    if not k:
+        raise Fail(f"no Brave Search API key: put it in {f} (or BRAVE_API_KEY)")
+    return k
+
+
+def clean(s: str) -> str:
+    return " ".join(html.unescape(re.sub(r"<[^>]+>", "", s or "")).split())
+
+
+def search(query: str, count: int) -> list[dict]:
+    url = os.environ.get("AI_APP_BRAVE_ENDPOINT") or ENDPOINT
+    url += "?" + urllib.parse.urlencode({"q": query, "count": count})
+    req = urllib.request.Request(url, headers={
+        "Accept": "application/json",
+        "X-Subscription-Token": api_key(),
+        "User-Agent": USER_AGENT,
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+            data = json.loads(r.read(4 * 1024 * 1024))
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403, 422):
+            raise Fail(f"Brave refused the API key (HTTP {e.code}): check {key_file()}")
+        if e.code == 429:
+            raise Fail("Brave rate limit or monthly quota reached (HTTP 429): wait, or check your plan")
+        raise Fail(f"Brave answered HTTP {e.code}")
+    except urllib.error.URLError as e:
+        raise Fail(f"cannot reach Brave Search: {e.reason}")
+    except (TimeoutError, OSError) as e:
+        raise Fail(f"cannot reach Brave Search: {e}")
+    except ValueError:
+        raise Fail("Brave answered something that is not JSON")
+    return ((data.get("web") or {}).get("results")) or []
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(prog="websearch", description="Search the web (Brave).")
+    ap.add_argument("query", nargs="*")
+    ap.add_argument("--count", type=int, default=5)
+    a = ap.parse_args(argv)
+    query = " ".join(a.query).strip()
+    if not query:
+        print("websearch: give a query, e.g. websearch flutter pty windows", file=sys.stderr)
+        return 2
+    count = min(max(a.count, 1), 20)
+    try:
+        results = search(query, count)
+    except Fail as e:
+        print("websearch: " + " ".join(str(e).split()), file=sys.stderr)
+        return 2
+    except Exception as e:  # one line, never a traceback, for the agent
+        print(f"websearch: {type(e).__name__}: " + " ".join(str(e).split()), file=sys.stderr)
+        return 2
+    if not results:
+        print(f"No results for: {query}")
+        return 0
+    out = []
+    for i, r in enumerate(results[:count], 1):
+        out.append(f"{i}. {clean(r.get('title', ''))}\n   {r.get('url', '')}\n   {clean(r.get('description', ''))}")
+    print("\n".join(out))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
