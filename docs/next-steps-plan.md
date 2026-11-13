@@ -65,7 +65,7 @@ one is available.
 
 ## D. Features (decided 2026-11-13)
 
-- **In progress** ([local-agents-plan.md](local-agents-plan.md)): full Claude
+- **Done 2026-11-13** ([local-agents-plan.md](local-agents-plan.md)): full Claude
   as a fourth local profile (64K window and up), a Qwen Code profile, and
   Brave web search for the local agents (you create a Brave Search API key).
 - **Later**: everything else, listed in [ideas.md](ideas.md) (shorter tool
