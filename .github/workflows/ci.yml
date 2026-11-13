@@ -55,7 +55,12 @@ jobs:
         if: failure()
         run: python .github/scripts/unittest_annotations.py host-tests.log
       - name: webread tests
-        run: python -I -m unittest discover -s tools/tests -t . -v
+        run: |
+          set -o pipefail
+          python -I -m unittest discover -s tools/tests -t . -v 2>&1 | tee tools-tests.log
+      - name: failing webread tests as annotations
+        if: failure()
+        run: python .github/scripts/unittest_annotations.py tools-tests.log
       - run: flutter build macos --release
 
   windows:

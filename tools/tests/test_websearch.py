@@ -105,7 +105,14 @@ class WebsearchTests(unittest.TestCase):
         self.assertEqual(r.stdout.count("https://example.org/"), 20)
 
     def test_key_from_the_config_file(self):
-        d = pathlib.Path(self.home) / ".config" / "ai-app"
+        # The settings folder websearch reads on this platform.
+        home = pathlib.Path(self.home)
+        if sys.platform == "darwin":
+            d = home / "Library" / "Application Support" / "ai-app"
+        elif sys.platform == "win32":
+            d = home / "AppData" / "Roaming" / "ai-app"
+        else:
+            d = home / ".config" / "ai-app"
         d.mkdir(parents=True)
         (d / "brave-api-key").write_text("file-key\n")
         r = self.run_ws("x", key=None)
