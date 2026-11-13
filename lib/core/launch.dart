@@ -63,6 +63,7 @@ LaunchSpec buildLaunch(
       AgentKind.codex => 'CODEX_HOME',
       AgentKind.pi => 'PI_CODING_AGENT_DIR',
       AgentKind.opencode => 'OPENCODE_CONFIG',
+      AgentKind.qwen => 'QWEN_HOME',
     };
     env[key] = sandbox.overrideValue(p.kind);
   } else {
@@ -182,7 +183,7 @@ List<String> modelArgs(AgentKind kind, Sandbox sandbox, AgentChoice? choice) {
   if (choice == null) return const [];
   try {
     switch (kind) {
-      case AgentKind.claude:
+      case AgentKind.claude || AgentKind.qwen:
         return const [];
       case AgentKind.codex:
         final name =

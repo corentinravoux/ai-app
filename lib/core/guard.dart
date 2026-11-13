@@ -20,6 +20,7 @@ class RealConfigGuard {
     '$realHome/.pi/agent/models.json',
     '$realHome/.pi/agent/settings.json',
     '$realHome/.config/opencode/opencode.jsonc',
+    '$realHome/.qwen/settings.json',
   ];
 
   /// sha256 per path (through symlinks); null for a missing file.

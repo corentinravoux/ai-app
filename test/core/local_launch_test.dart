@@ -40,24 +40,23 @@ HostStatus st(
 );
 
 void main() {
-  test('localProfiles builds three profiles per host with stable ids', () {
+  test('localProfiles builds five profiles per host with stable ids', () {
     final ps = localProfiles([local, pc]);
     expect(ps.map((p) => p.id), [
-      'local-pi-local',
-      'local-opencode-local',
-      'local-claude-local',
-      'local-pi-pc',
-      'local-opencode-pc',
-      'local-claude-pc',
+      for (final h in ['local', 'pc'])
+        for (final a in ['pi', 'opencode', 'qwen', 'claude', 'claude-full'])
+          'local-$a-$h',
     ]);
-    expect(ps.map((p) => p.label).take(3), [
+    expect(ps.map((p) => p.label).take(5), [
       'Pi · This machine',
       'OpenCode · This machine',
+      'Qwen Code · This machine',
       'Claude · This machine',
+      'Claude (full) · This machine',
     ]);
     expect(ps.every((p) => p.backend == Backend.local && p.isLocal), isTrue);
     expect(ps.every((p) => !p.isAlcf && !p.isNative), isTrue);
-    expect(ps[3].hostId, 'pc');
+    expect(ps[5].hostId, 'pc');
   });
 
   group('localReadiness', () {
@@ -65,29 +64,29 @@ void main() {
 
     test('blocked reasons verbatim', () {
       expect(
-        reason(localReadiness(AgentKind.pi, pc, null)),
+        reason(localReadiness(LocalAgent.pi, pc, null)),
         'PC is unreachable',
       );
       expect(
-        reason(localReadiness(AgentKind.pi, pc, st(ServerState.stopped))),
+        reason(localReadiness(LocalAgent.pi, pc, st(ServerState.stopped))),
         'No model is running on PC: start one',
       );
       expect(
-        reason(localReadiness(AgentKind.pi, pc, st(ServerState.loading))),
+        reason(localReadiness(LocalAgent.pi, pc, st(ServerState.loading))),
         'PC is loading Qwen3.6 35B-A3B · 64K…',
       );
       expect(
-        reason(localReadiness(AgentKind.pi, pc, st(ServerState.foreign))),
+        reason(localReadiness(LocalAgent.pi, pc, st(ServerState.foreign))),
         'A llama-server not started by AI App is running on PC',
       );
       expect(
-        reason(localReadiness(AgentKind.pi, pc, st(ServerState.error))),
+        reason(localReadiness(LocalAgent.pi, pc, st(ServerState.error))),
         'The model failed to start on PC: open the log',
       );
     });
 
     test('ready carries ctx, output cap, alias and the host url', () {
-      final r = localReadiness(AgentKind.claude, pc, st(ServerState.ready));
+      final r = localReadiness(LocalAgent.claude, pc, st(ServerState.ready));
       final t = (r as LocalReady).target;
       expect(
         (t.ctx, t.maxOutput, t.alias, t.baseUrl, t.hostLabel),
@@ -97,10 +96,10 @@ void main() {
 
     test('open is refused below the agent minimum', () {
       final s = st(ServerState.ready, ctx: 24576, label: 'Small · 24K');
-      expect(localReadiness(AgentKind.pi, local, s), isA<LocalReady>());
-      expect(localReadiness(AgentKind.opencode, local, s), isA<LocalReady>());
+      expect(localReadiness(LocalAgent.pi, local, s), isA<LocalReady>());
+      expect(localReadiness(LocalAgent.opencode, local, s), isA<LocalReady>());
       expect(
-        reason(localReadiness(AgentKind.claude, local, s)),
+        reason(localReadiness(LocalAgent.claude, local, s)),
         'Claude Code needs a 32768-token window; Small · 24K has 24576',
       );
     });
@@ -108,19 +107,19 @@ void main() {
     test('a server on another port than the saved one is blocked', () {
       final s = st(ServerState.ready, port: 9932);
       expect(
-        reason(localReadiness(AgentKind.pi, local, s)),
+        reason(localReadiness(LocalAgent.pi, local, s)),
         'The model on This machine serves on port 9932, '
         'but the host is set to 9931: edit the host',
       );
       expect(
-        reason(localReadiness(AgentKind.pi, pc, s)),
+        reason(localReadiness(LocalAgent.pi, pc, s)),
         contains('port 9932'),
       );
     });
 
     test('ready without a known window or alias is blocked', () {
       final s = HostStatus(state: ServerState.ready, port: 9931);
-      expect(localReadiness(AgentKind.pi, local, s), isA<LocalBlocked>());
+      expect(localReadiness(LocalAgent.pi, local, s), isA<LocalBlocked>());
     });
   });
 
@@ -302,11 +301,5 @@ void main() {
   test('kAgentBinDirs includes the user Node install', () {
     expect(kAgentBinDirs, contains('opt/node/bin'));
     expect(kAgentBinDirs, contains('.npm-global/bin'));
-  });
-
-  test('every local agent has a minimum window', () {
-    for (final k in kLocalAgents) {
-      expect(kMinCtx[k], isNotNull);
-    }
   });
 }

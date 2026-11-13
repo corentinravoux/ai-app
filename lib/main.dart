@@ -115,12 +115,16 @@ Future<void> main() async {
         ? 'ALCF needs Linux or macOS'
         : 'alcf-ai is not installed',
     guardPaths: RealConfigGuard.defaultPaths(realHome, claudeDirs),
+    claudeSourceDir: Directory('$realHome/.claude').existsSync()
+        ? '$realHome/.claude'
+        : null,
     guardedRoots: [
       '$realHome/.claude',
       ...claudeDirs,
       '$realHome/.pi',
       '$realHome/.config/opencode',
       '$realHome/.codex',
+      '$realHome/.qwen',
       '$realHome/Software/claude_config/claude',
     ],
   );

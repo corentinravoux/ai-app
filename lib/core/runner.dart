@@ -76,11 +76,7 @@ class _Collector {
   _Collector(Stream<List<int>> s) {
     s
         .transform(const Utf8Decoder(allowMalformed: true))
-        .listen(
-          (d) => _buf?.write(d),
-          onDone: _done.complete,
-          onError: (_) {},
-        );
+        .listen((d) => _buf?.write(d), onDone: _done.complete, onError: (_) {});
   }
 
   StringBuffer? _buf = StringBuffer();

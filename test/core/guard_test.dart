@@ -17,6 +17,7 @@ void main() {
       '$h/.pi/agent/models.json',
       '$h/.pi/agent/settings.json',
       '$h/.config/opencode/opencode.jsonc',
+      '$h/.qwen/settings.json',
     ]);
   });
 

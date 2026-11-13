@@ -41,6 +41,8 @@ class Sandbox {
     AgentKind.codex => '$home/.codex',
     AgentKind.pi => '$home/.pi/agent',
     AgentKind.opencode => '$home/.config/opencode/opencode.jsonc',
+    // Qwen Code is only offered on model hosts, never on ALCF.
+    AgentKind.qwen => '$home/.qwen',
   };
 
   /// True once alcf-ai has written this agent's config into the sandbox.
@@ -61,6 +63,7 @@ class Sandbox {
       overrideValue(k),
       'alcf-inference-service-',
     ),
+    AgentKind.qwen => false,
   };
 
   /// True when `install.sh --alcf` has linked the shared CLAUDE.md.

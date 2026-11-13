@@ -70,6 +70,7 @@ class AppState extends ChangeNotifier {
     this.dataRoot = '',
     this.guardedRoots = const [],
     this.guardPaths = const [],
+    this.claudeSourceDir,
     this.sshAvailable = true,
     this.alcfMissing = 'alcf-ai is not installed',
   }) : baseProfiles = profiles,
@@ -99,6 +100,10 @@ class AppState extends ChangeNotifier {
 
   /// Files hashed around every local launch (RealConfigGuard).
   final List<String> guardPaths;
+
+  /// The user's own Claude folder, whose CLAUDE.md, commands and skills
+  /// full Claude on a model host links to; null: none shared.
+  final String? claudeSourceDir;
 
   /// False when ssh is missing: remote hosts cannot be reached.
   final bool sshAvailable;
@@ -334,7 +339,7 @@ class AppState extends ChangeNotifier {
       // llm-host missing or answering garbage: say so, not "unreachable".
       return LocalBlocked(problem);
     }
-    final r = localReadiness(p.kind, h, s);
+    final r = localReadiness(p.localAgent!, h, s);
     // Status travels over ssh itself; the agents need the forward.
     if (r is LocalReady && h.isRemote && tunnels != null) {
       final t = tunnelOf(h.id);
@@ -655,6 +660,7 @@ class AppState extends ChangeNotifier {
         cwd: cwd,
         toolsBinDir: '$dataRoot/bin',
         guardedRoots: guardedRoots,
+        claudeSourceDir: claudeSourceDir,
       );
     } on StateError catch (e) {
       return e.message;

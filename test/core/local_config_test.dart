@@ -141,30 +141,34 @@ void main() {
   });
 
   test('overrideEnv per agent', () {
-    expect(overrideEnv(AgentKind.pi, '/d'), {'PI_CODING_AGENT_DIR': '/d'});
-    expect(overrideEnv(AgentKind.opencode, '/d'), {
+    expect(overrideEnv(LocalAgent.pi, '/d'), {'PI_CODING_AGENT_DIR': '/d'});
+    expect(overrideEnv(LocalAgent.opencode, '/d'), {
       'OPENCODE_CONFIG': '/d/opencode.jsonc',
       'OPENCODE_DISABLE_PROJECT_CONFIG': '1',
       'OPENCODE_DISABLE_AUTOUPDATE': '1',
       'OPENCODE_DISABLE_MODELS_FETCH': '1',
     });
-    expect(overrideEnv(AgentKind.claude, '/d'), {'CLAUDE_CONFIG_DIR': '/d'});
+    expect(overrideEnv(LocalAgent.claude, '/d'), {'CLAUDE_CONFIG_DIR': '/d'});
   });
 
   test('writeLocalConfig writes each agent', () async {
-    final pi = localDir('$home/.local/share/ai-app', 'local', AgentKind.pi);
-    await writeLocalConfig(AgentKind.pi, t32, pi, guardedRoots: guarded);
+    final pi = localDir('$home/.local/share/ai-app', 'local', LocalAgent.pi);
+    await writeLocalConfig(LocalAgent.pi, t32, pi, guardedRoots: guarded);
     expect(readJson('$pi/models.json'), jsonDecode(jsonEncode(piModels(t32))));
     expect(readJson('$pi/settings.json')['defaultModel'], 'qwen36-35b-32k');
     final oc = localDir(
       '$home/.local/share/ai-app',
       'local',
-      AgentKind.opencode,
+      LocalAgent.opencode,
     );
-    await writeLocalConfig(AgentKind.opencode, t32, oc, guardedRoots: guarded);
+    await writeLocalConfig(LocalAgent.opencode, t32, oc, guardedRoots: guarded);
     expect(readJson('$oc/opencode.jsonc')['model'], 'local/qwen36-35b-32k');
-    final cl = localDir('$home/.local/share/ai-app', 'local', AgentKind.claude);
-    await writeLocalConfig(AgentKind.claude, t32, cl, guardedRoots: guarded);
+    final cl = localDir(
+      '$home/.local/share/ai-app',
+      'local',
+      LocalAgent.claude,
+    );
+    await writeLocalConfig(LocalAgent.claude, t32, cl, guardedRoots: guarded);
     expect(Directory(cl).existsSync(), isTrue);
     expect(
       Directory(cl).listSync(),
@@ -181,7 +185,7 @@ void main() {
       '$home/.claude-alt',
     ]) {
       await expectLater(
-        writeLocalConfig(AgentKind.pi, t32, d, guardedRoots: guarded),
+        writeLocalConfig(LocalAgent.pi, t32, d, guardedRoots: guarded),
         throwsStateError,
         reason: d,
       );
@@ -195,7 +199,7 @@ void main() {
     Link('$home/.local/share/ai-app').createSync('$home/.pi');
     await expectLater(
       writeLocalConfig(
-        AgentKind.pi,
+        LocalAgent.pi,
         t32,
         '$home/.local/share/ai-app/local/local/pi',
         guardedRoots: guarded,
@@ -205,20 +209,23 @@ void main() {
     expect(Directory('$home/.pi/local').existsSync(), isFalse);
   });
 
-  test('writeLocalConfig refuses a symlinked extensions dir into a guarded root', () async {
-    final dir = '$home/data/local/pc/pi';
-    Directory(dir).createSync(recursive: true);
-    Directory('$home/.pi/agent/extensions').createSync(recursive: true);
-    Link('$dir/extensions').createSync('$home/.pi/agent/extensions');
-    await expectLater(
-      writeLocalConfig(AgentKind.pi, t32, dir, guardedRoots: guarded),
-      throwsStateError,
-    );
-    expect(
-      File('$home/.pi/agent/extensions/web_read.ts').existsSync(),
-      isFalse,
-    );
-  });
+  test(
+    'writeLocalConfig refuses a symlinked extensions dir into a guarded root',
+    () async {
+      final dir = '$home/data/local/pc/pi';
+      Directory(dir).createSync(recursive: true);
+      Directory('$home/.pi/agent/extensions').createSync(recursive: true);
+      Link('$dir/extensions').createSync('$home/.pi/agent/extensions');
+      await expectLater(
+        writeLocalConfig(LocalAgent.pi, t32, dir, guardedRoots: guarded),
+        throwsStateError,
+      );
+      expect(
+        File('$home/.pi/agent/extensions/web_read.ts').existsSync(),
+        isFalse,
+      );
+    },
+  );
 
   test('writeLocalConfig replaces a symlinked models.json without touching its target', () async {
     final dir = '$home/data/local/pc/pi';
@@ -226,7 +233,7 @@ void main() {
     final target = File('$home/shared-models.json')
       ..writeAsStringSync('{"keep": true}');
     Link('$dir/models.json').createSync(target.path);
-    await writeLocalConfig(AgentKind.pi, t32, dir, guardedRoots: guarded);
+    await writeLocalConfig(LocalAgent.pi, t32, dir, guardedRoots: guarded);
     expect(FileSystemEntity.isLinkSync('$dir/models.json'), isFalse);
     expect(target.readAsStringSync(), '{"keep": true}');
     expect(readJson('$dir/models.json')['providers'], isNotNull);
@@ -243,7 +250,7 @@ void main() {
           'compaction': {'enabled': false, 'reserveTokens': 1},
         }),
       );
-      await writeLocalConfig(AgentKind.pi, t32, dir, guardedRoots: guarded);
+      await writeLocalConfig(LocalAgent.pi, t32, dir, guardedRoots: guarded);
       final s = readJson('$dir/settings.json');
       expect(s['theme'], 'light');
       expect(s['compaction'], {
@@ -258,13 +265,13 @@ void main() {
     final dir = '$home/data/pi';
     Directory(dir).createSync(recursive: true);
     File('$dir/settings.json').writeAsStringSync('{oops');
-    await writeLocalConfig(AgentKind.pi, t32, dir, guardedRoots: guarded);
+    await writeLocalConfig(LocalAgent.pi, t32, dir, guardedRoots: guarded);
     expect(readJson('$dir/settings.json')['defaultProvider'], 'local');
   });
 
   test('pi config contains the web_read extension', () async {
     final dir = '$home/data/local/pc/pi';
-    await writeLocalConfig(AgentKind.pi, t32, dir, guardedRoots: guarded);
+    await writeLocalConfig(LocalAgent.pi, t32, dir, guardedRoots: guarded);
     final ext = File('$dir/extensions/web_read.ts').readAsStringSync();
     expect(ext, contains('pi.registerTool'));
     expect(ext, contains('name: "web_read"'));
@@ -304,32 +311,23 @@ void main() {
   });
 
   test('two hosts get two directories', () {
-    expect(localDir('/d', 'local', AgentKind.pi), '/d/local/local/pi');
-    expect(localDir('/d', 'pc', AgentKind.pi), '/d/local/pc/pi');
-  });
-
-  test('kMinCtx and kLocalAgents', () {
-    expect(kMinCtx, {
-      AgentKind.pi: 16384,
-      AgentKind.opencode: 24576,
-      AgentKind.claude: 32768,
-    });
-    expect(kLocalAgents, [AgentKind.pi, AgentKind.opencode, AgentKind.claude]);
+    expect(localDir('/d', 'local', LocalAgent.pi), '/d/local/local/pi');
+    expect(localDir('/d', 'pc', LocalAgent.pi), '/d/local/pc/pi');
   });
 
   test('two writes of the same file at once both succeed', () async {
     final dir = '$home/data/local/pc/pi';
     await Future.wait([
-      writeLocalConfig(AgentKind.pi, t32, dir, guardedRoots: guarded),
-      writeLocalConfig(AgentKind.pi, t32, dir, guardedRoots: guarded),
+      writeLocalConfig(LocalAgent.pi, t32, dir, guardedRoots: guarded),
+      writeLocalConfig(LocalAgent.pi, t32, dir, guardedRoots: guarded),
       writeLocalConfig(
-        AgentKind.opencode,
+        LocalAgent.opencode,
         t32,
         '$home/data/local/pc/oc',
         guardedRoots: guarded,
       ),
       writeLocalConfig(
-        AgentKind.opencode,
+        LocalAgent.opencode,
         t32,
         '$home/data/local/pc/oc',
         guardedRoots: guarded,

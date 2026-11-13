@@ -338,9 +338,8 @@ class _RecipeMenuState extends State<_RecipeMenu> {
     if (name != null && mounted) await _start(context, name);
   }
 
-  static String _signature(List<Recipe> rs) => [
-    for (final r in rs) '${r.name}|${r.label}|${r.modelPresent}',
-  ].join('\n');
+  static String _signature(List<Recipe> rs) =>
+      [for (final r in rs) '${r.name}|${r.label}|${r.modelPresent}'].join('\n');
 
   Future<void> _start(BuildContext context, String name) async {
     final n = state.openTabsOn(host.id);

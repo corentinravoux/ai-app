@@ -302,7 +302,10 @@ exec python3 -c "import socket,time; s=socket.socket(); s.setsockopt(socket.SOL_
     await m.ensure(pc);
     expect(starts, isEmpty);
     expect(m.stateOf('pc').phase, TunnelPhase.down);
-    expect(m.stateOf('pc').error, 'port 19931 is already in use on this machine');
+    expect(
+      m.stateOf('pc').error,
+      'port 19931 is already in use on this machine',
+    );
     // fatal: polling does not try again, an explicit retry checks again
     await m.ensure(pc);
     expect(starts, isEmpty);

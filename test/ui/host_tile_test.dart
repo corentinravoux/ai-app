@@ -239,7 +239,7 @@ void main() {
       for (final a in ['pi', 'opencode', 'claude']) {
         expect(button(tester, 'open-local-$a-pc').onPressed, isNull, reason: a);
       }
-      expect(find.text('PC is unreachable'), findsNWidgets(3));
+      expect(find.text('PC is unreachable'), findsNWidgets(5));
       expect(button(tester, 'open-local-pi-local').onPressed, isNotNull);
     },
   );
@@ -249,7 +249,7 @@ void main() {
     final state = await pump(tester, makeState(hosts: const [local]));
     expect(
       find.text('No model is running on This machine: start one'),
-      findsNWidgets(4),
+      findsNWidgets(6),
     );
     await tester.tap(find.byKey(const ValueKey('host-menu-local')));
     await tester.pumpAndSettle();
@@ -489,7 +489,8 @@ void main() {
       await pump(tester, state);
       const why =
           'The tunnel to PC is not open: port 19931 is already in use on this machine';
-      expect(find.text(why), findsNWidgets(3));
+      // Claude (full) is blocked first by the 32K window (it needs 64K).
+      expect(find.text(why), findsNWidgets(4));
       expect(button(tester, 'open-local-pi-pc').onPressed, isNull);
       expect(
         find.text('Tunnel: port 19931 is already in use on this machine'),

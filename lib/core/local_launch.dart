@@ -6,23 +6,24 @@ import 'local_config.dart';
 import 'platform_paths.dart';
 import 'profiles.dart';
 
-/// Pi, OpenCode and Claude Code for every model host, in that order.
+/// Every [LocalAgent] for every model host, in that order.
 /// Ids start with `local-`: `<agent>-<host id>` alone collides with native
 /// and ALCF ids for hosts named "default", "alcf" or like a Claude account.
 List<Profile> localProfiles(List<ModelHost> hosts) => [
   for (final h in hosts)
-    for (final k in kLocalAgents)
+    for (final a in LocalAgent.values)
       Profile(
-        id: localProfileId(k, h.id),
-        label: '${_short(k)} · ${h.label}',
-        kind: k,
+        id: localProfileId(a, h.id),
+        label: '${a.label} · ${h.label}',
+        kind: a.kind,
         backend: Backend.local,
         hostId: h.id,
+        localAgent: a,
       ),
 ];
 
-String localProfileId(AgentKind k, String hostId) =>
-    'local-${k.name}-$hostId';
+String localProfileId(LocalAgent a, String hostId) =>
+    'local-${a.dirName}-$hostId';
 
 /// Removed from local tabs on top of [kStrippedEnvKeys] and every
 /// `ANTHROPIC_*`: switches that send Claude Code to a cloud provider, and
@@ -40,14 +41,16 @@ const kLocalStrippedEnvKeys = [
   'OPENCODE_CONFIG_DIR',
 ];
 
-String _short(AgentKind k) => switch (k) {
-  AgentKind.pi => 'Pi',
-  AgentKind.opencode => 'OpenCode',
-  AgentKind.claude => 'Claude',
-  AgentKind.codex => 'Codex',
-};
-
-String _long(AgentKind k) => k == AgentKind.claude ? 'Claude Code' : _short(k);
+/// Whether a variable of the window AI App was started from is dropped
+/// from local tabs: other agents' routing, cloud-provider switches, and the
+/// OpenAI / Qwen / Gemini settings that Qwen Code would read first.
+bool isLocalStripped(String key) =>
+    kStrippedEnvKeys.contains(key) ||
+    kLocalStrippedEnvKeys.contains(key) ||
+    key.startsWith('ANTHROPIC_') ||
+    key.startsWith('OPENAI_') ||
+    key.startsWith('QWEN_') ||
+    key.startsWith('GEMINI_');
 
 sealed class LocalReadiness {
   const LocalReadiness();
@@ -65,9 +68,9 @@ class LocalBlocked extends LocalReadiness {
   final String reason;
 }
 
-/// Whether agent [k] can open on host [h] given its status [s] (null:
+/// Whether agent [a] can open on host [h] given its status [s] (null:
 /// unreachable), and if so against what.
-LocalReadiness localReadiness(AgentKind k, ModelHost h, HostStatus? s) {
+LocalReadiness localReadiness(LocalAgent a, ModelHost h, HostStatus? s) {
   final l = h.label;
   if (s == null) return LocalBlocked('$l is unreachable');
   switch (s.state) {
@@ -97,10 +100,10 @@ LocalReadiness localReadiness(AgentKind k, ModelHost h, HostStatus? s) {
   if (ctx == null || alias == null) {
     return LocalBlocked('$l did not report its model and window');
   }
-  final min = kMinCtx[k]!;
+  final min = a.minCtx;
   if (ctx < min) {
     return LocalBlocked(
-      '${_long(k)} needs a $min-token window; '
+      '${a.longName} needs a $min-token window; '
       '${s.label ?? alias} has $ctx',
     );
   }
@@ -129,20 +132,26 @@ Future<LaunchSpec> buildLocalLaunch(
   required String cwd,
   required String toolsBinDir,
   required List<String> guardedRoots,
+  String? claudeSourceDir,
 }) async {
-  if (!p.isLocal || p.hostId != host.id) {
+  final a = p.localAgent;
+  if (!p.isLocal || a == null || p.hostId != host.id) {
     throw ArgumentError('${p.id} is not a profile of host ${host.id}');
   }
-  final dir = localDir(dataRoot, host.id, p.kind);
-  await writeLocalConfig(p.kind, target, dir, guardedRoots: guardedRoots);
+  final dir = localDir(dataRoot, host.id, a);
+  await writeLocalConfig(
+    a,
+    target,
+    dir,
+    guardedRoots: guardedRoots,
+    claudeSourceDir: claudeSourceDir,
+  );
+  final full = a == LocalAgent.claudeFull;
   final env = {
     for (final e in parentEnv.entries)
-      if (!kStrippedEnvKeys.contains(e.key) &&
-          !kLocalStrippedEnvKeys.contains(e.key) &&
-          !e.key.startsWith('ANTHROPIC_'))
-        e.key: e.value,
-    ...overrideEnv(p.kind, dir),
-    if (p.kind == AgentKind.claude) ...claudeLocalEnv(target, dir),
+      if (!isLocalStripped(e.key)) e.key: e.value,
+    ...overrideEnv(a, dir),
+    if (a.kind == AgentKind.claude) ...claudeLocalEnv(target, dir, full: full),
     'PATH': [
       toolsBinDir,
       if ((parentEnv['PATH'] ?? '').isNotEmpty) parentEnv['PATH']!,
@@ -151,7 +160,7 @@ Future<LaunchSpec> buildLocalLaunch(
   };
   return LaunchSpec(
     executable: exePath,
-    args: p.kind == AgentKind.claude ? claudeLocalArgs() : const [],
+    args: a.kind == AgentKind.claude ? claudeLocalArgs(full: full) : const [],
     env: env,
     cwd: cwd,
   );

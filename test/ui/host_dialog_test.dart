@@ -323,7 +323,9 @@ void main() {
     expect(state.profiles.where((p) => p.hostId == 'pc').map((p) => p.id), [
       'local-pi-pc',
       'local-opencode-pc',
+      'local-qwen-pc',
       'local-claude-pc',
+      'local-claude-full-pc',
     ]);
   });
 

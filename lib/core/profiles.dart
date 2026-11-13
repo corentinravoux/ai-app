@@ -15,6 +15,7 @@ class Profile {
     required this.backend,
     this.nativeConfigDir,
     this.hostId,
+    this.localAgent,
   });
 
   final String id;
@@ -27,6 +28,9 @@ class Profile {
 
   /// For local profiles: the model host's id (hosts.dart).
   final String? hostId;
+
+  /// For local profiles: which agent (two of them run Claude Code).
+  final LocalAgent? localAgent;
 
   bool get isAlcf => backend == Backend.alcf;
   bool get isNative => backend == Backend.native;

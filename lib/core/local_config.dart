@@ -29,20 +29,8 @@ class LocalTarget {
   final bool vision;
 }
 
-/// Smallest window each agent works in: its own prompt and tools take
-/// ~1.5K (Pi), ~13K (OpenCode) and ~22K (Claude Code) tokens
-/// (docs/local-wire-notes.md).
-const kMinCtx = {
-  AgentKind.pi: 16384,
-  AgentKind.opencode: 24576,
-  AgentKind.claude: 32768,
-};
-
-/// Agents offered against model hosts, in sidebar order.
-const kLocalAgents = [AgentKind.pi, AgentKind.opencode, AgentKind.claude];
-
-String localDir(String dataRoot, String hostId, AgentKind k) =>
-    '$dataRoot/local/$hostId/${k.name}';
+String localDir(String dataRoot, String hostId, LocalAgent a) =>
+    '$dataRoot/local/$hostId/${a.dirName}';
 
 Map<String, dynamic> piModels(LocalTarget t) => {
   'providers': {
@@ -112,12 +100,47 @@ Map<String, dynamic> opencodeConfig(LocalTarget t) => {
   'tool_output': {'max_lines': 400, 'max_bytes': 16384},
 };
 
-/// Claude Code against llama-server's `/v1/messages`: everything goes
-/// through the environment, nothing into a settings file.
-Map<String, String> claudeLocalEnv(LocalTarget t, String dir) => {
+/// Qwen Code's `settings.json` (measured with Qwen Code 0.27.3). Folder
+/// trust is on with a private trusted-folders file, so a project's own
+/// `.qwen/settings.json` (which would replace the provider) is ignored.
+Map<String, dynamic> qwenSettings(LocalTarget t) => {
+  'modelProviders': {
+    'openai': [
+      {
+        'id': t.alias,
+        'name': t.alias,
+        'envKey': 'LOCAL_API_KEY',
+        'baseUrl': '${t.baseUrl}/v1',
+        'generationConfig': {
+          'contextWindowSize': t.ctx,
+          'samplingParams': {'max_tokens': t.maxOutput},
+        },
+      },
+    ],
+  },
+  'env': {'LOCAL_API_KEY': 'local'},
+  'security': {
+    'auth': {'selectedType': 'openai'},
+    'folderTrust': {'enabled': true},
+  },
+  'model': {'name': t.alias},
+  'context': {'autoCompactThreshold': 0.75},
+  'telemetry': {'enabled': false},
+  'privacy': {'usageStatisticsEnabled': false},
+};
+
+/// Claude Code against llama-server's `/v1/messages`, set through the
+/// environment. [full] (Claude with the user's instructions and skills)
+/// authenticates through `apiKeyHelper` in its settings instead: outside
+/// `--bare`, `ANTHROPIC_API_KEY` alone gives "Not logged in" (measured).
+Map<String, String> claudeLocalEnv(
+  LocalTarget t,
+  String dir, {
+  bool full = false,
+}) => {
   'CLAUDE_CONFIG_DIR': dir,
   'ANTHROPIC_BASE_URL': t.baseUrl,
-  'ANTHROPIC_API_KEY': 'local',
+  if (!full) 'ANTHROPIC_API_KEY': 'local',
   'ANTHROPIC_MODEL': t.alias,
   'ANTHROPIC_DEFAULT_HAIKU_MODEL': t.alias,
   'ANTHROPIC_DEFAULT_SONNET_MODEL': t.alias,
@@ -128,7 +151,7 @@ Map<String, String> claudeLocalEnv(LocalTarget t, String dir) => {
   'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC': '1',
   'CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS': '1',
   'CLAUDE_CODE_ATTRIBUTION_HEADER': '0',
-  'CLAUDE_CODE_SIMPLE_SYSTEM_PROMPT': '1',
+  if (!full) 'CLAUDE_CODE_SIMPLE_SYSTEM_PROMPT': '1',
   'NO_PROXY': '127.0.0.1,localhost',
 };
 
@@ -140,44 +163,59 @@ Map<String, String> claudeLocalEnv(LocalTarget t, String dir) => {
 /// overriding the endpoint: its `env` block applies even under `--bare`
 /// (measured with Claude Code 2.1.322). "user" is this tab's own empty
 /// config folder.
-List<String> claudeLocalArgs() => const [
-  '--bare',
+///
+/// [full]: no `--bare` and every tool; the user's `CLAUDE.md`, commands and
+/// skills come from links in the tab's config folder.
+List<String> claudeLocalArgs({bool full = false}) => [
+  if (!full) '--bare',
   '--setting-sources',
   'user',
-  '--tools',
-  'Bash,Read,Edit',
+  if (!full) ...['--tools', 'Bash,Read,Edit'],
   '--append-system-prompt',
-  'To read a web page, run: webread <url>',
+  kWebToolsPrompt,
 ];
 
-Map<String, String> overrideEnv(AgentKind k, String dir) => switch (k) {
-  AgentKind.pi => {'PI_CODING_AGENT_DIR': dir},
+/// Tells Claude how to reach the web from a local tab.
+const kWebToolsPrompt = 'To read a web page, run: webread <url>';
+
+Map<String, String> overrideEnv(LocalAgent a, String dir) => switch (a) {
+  LocalAgent.pi => {'PI_CODING_AGENT_DIR': dir},
   // A project's opencode.json would otherwise be merged over this config
   // (its provider wins); no update checks or models.dev fetches offline.
-  AgentKind.opencode => {
+  LocalAgent.opencode => {
     'OPENCODE_CONFIG': '$dir/opencode.jsonc',
     'OPENCODE_DISABLE_PROJECT_CONFIG': '1',
     'OPENCODE_DISABLE_AUTOUPDATE': '1',
     'OPENCODE_DISABLE_MODELS_FETCH': '1',
   },
-  AgentKind.claude => {'CLAUDE_CONFIG_DIR': dir},
-  AgentKind.codex => throw ArgumentError('codex is not offered on model hosts'),
+  // Qwen Code keeps its whole global config in QWEN_HOME; the trusted
+  // folders list stays private, so no project is trusted.
+  LocalAgent.qwen => {
+    'QWEN_HOME': dir,
+    'QWEN_CODE_TRUSTED_FOLDERS_PATH': '$dir/trustedFolders.json',
+  },
+  LocalAgent.claude || LocalAgent.claudeFull => {'CLAUDE_CONFIG_DIR': dir},
 };
 
-/// Writes agent [k]'s config for [t] into [dir]. Refuses (StateError,
+/// What full Claude shares from the user's own Claude folder, as links.
+const kClaudeSharedItems = ['CLAUDE.md', 'commands', 'skills', 'agents'];
+
+/// Writes agent [a]'s config for [t] into [dir]. Refuses (StateError,
 /// nothing written) when [dir] is, or resolves through a symlink to, a
 /// place under one of [guardedRoots] (the user's real agent configs).
+/// [claudeSourceDir]: the user's Claude folder, linked into full Claude's.
 Future<void> writeLocalConfig(
-  AgentKind k,
+  LocalAgent a,
   LocalTarget t,
   String dir, {
   required List<String> guardedRoots,
+  String? claudeSourceDir,
 }) async {
   _refuseGuarded(dir, guardedRoots);
   await Directory(dir).create(recursive: true);
   _refuseGuarded(dir, guardedRoots);
-  switch (k) {
-    case AgentKind.pi:
+  switch (a) {
+    case LocalAgent.pi:
       await _writeJson('$dir/models.json', piModels(t));
       Map<String, dynamic> old = {};
       try {
@@ -194,13 +232,63 @@ Future<void> writeLocalConfig(
       await Directory(ext).create();
       _refuseGuarded(ext, guardedRoots);
       await _writeText('$ext/web_read.ts', kPiWebReadExtension);
-    case AgentKind.opencode:
+    case LocalAgent.opencode:
       await _writeJson('$dir/opencode.jsonc', opencodeConfig(t));
-    case AgentKind.claude:
+    case LocalAgent.qwen:
+      await _writeJson('$dir/settings.json', {
+        ...await _readJsonOrEmpty('$dir/settings.json'),
+        ...qwenSettings(t),
+      });
+    case LocalAgent.claude:
       break;
-    case AgentKind.codex:
-      throw ArgumentError('codex is not offered on model hosts');
+    case LocalAgent.claudeFull:
+      await _writeJson('$dir/settings.json', {
+        ...await _readJsonOrEmpty('$dir/settings.json'),
+        'apiKeyHelper': 'echo local',
+      });
+      // Skip Claude Code's first-run screens in this fresh folder.
+      final state = await _readJsonOrEmpty('$dir/.claude.json');
+      if (state['hasCompletedOnboarding'] != true) {
+        await _writeJson('$dir/.claude.json', {
+          ...state,
+          'hasCompletedOnboarding': true,
+        });
+      }
+      final src = claudeSourceDir;
+      if (src != null) {
+        for (final n in kClaudeSharedItems) {
+          await _linkShared('$src/$n', '$dir/$n');
+        }
+      }
   }
+}
+
+Future<Map<String, dynamic>> _readJsonOrEmpty(String path) async {
+  try {
+    final v = jsonDecode(await File(path).readAsString());
+    if (v is Map) return Map<String, dynamic>.from(v);
+  } on Object {
+    // missing or corrupt: start over
+  }
+  return {};
+}
+
+/// Points [link] at [source] when [source] exists. A link is only ever
+/// created or re-pointed, never written through; a real file or folder
+/// the user put at [link] is left alone.
+Future<void> _linkShared(String source, String link) async {
+  final type = FileSystemEntity.typeSync(link, followLinks: false);
+  if (FileSystemEntity.typeSync(source) == FileSystemEntityType.notFound) {
+    if (type == FileSystemEntityType.link) await Link(link).delete();
+    return;
+  }
+  if (type == FileSystemEntityType.link) {
+    if (await Link(link).target() == source) return;
+    await Link(link).delete();
+  } else if (type != FileSystemEntityType.notFound) {
+    return;
+  }
+  await Link(link).create(source);
 }
 
 void _refuseGuarded(String dir, List<String> roots) {
